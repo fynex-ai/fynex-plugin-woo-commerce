@@ -95,10 +95,16 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 			return array( 'result' => 'failure' );
 		}
 
+		$amount = (float) $order->get_total();
+		if ( abs( ( $amount * 100 ) - round( $amount * 100 ) ) > 0.000001 ) {
+			wc_add_notice( __( 'Fynex supports amounts with up to two decimal places.', 'fynex-woo-commerce' ), 'error' );
+			return array( 'result' => 'failure' );
+		}
+
 		$attempt = $this->prepare_payment_attempt( $order );
 		$payload = array(
 			'externalOrderRef' => $attempt['payment_id'],
-			'amount'           => (float) $order->get_total(),
+			'amount'           => $amount,
 			'currencyCode'     => $order->get_currency(),
 			'countryCode'      => $this->country_code( $order ),
 			'autoSettlement'   => true,
@@ -185,8 +191,7 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 	}
 
 	private function amount_minor( WC_Order $order ): int {
-		$scale = 10 ** wc_get_price_decimals();
-		return (int) round( (float) $order->get_total() * $scale );
+		return (int) round( (float) $order->get_total() * 100 );
 	}
 
 	private function country_code( WC_Order $order ): string {
