@@ -92,7 +92,8 @@ final class Fynex_WC_Refund_Reconciliation {
 
 	public static function mark_succeeded( WC_Order $order, string $refund_id ): void {
 		$lock = 'fynex_woo_refund_lock_' . md5( $order->get_id() . ':' . $refund_id );
-		if ( ! self::acquire_lock( $lock ) ) {
+		$lease = self::acquire_lock( $lock );
+		if ( null === $lease ) {
 			self::schedule( (int) $order->get_id(), $refund_id );
 			return;
 		}
@@ -104,22 +105,32 @@ final class Fynex_WC_Refund_Reconciliation {
 			}
 			$order->save();
 		} finally {
-			delete_option( $lock );
+			self::release_lock( $lock, $lease );
 		}
 	}
 
 
 
-	private static function acquire_lock( string $lock ): bool {
-		if ( add_option( $lock, time(), '', false ) ) {
-			return true;
+
+	private static function acquire_lock( string $lock ): ?string {
+		$lease = wp_generate_uuid4() . ':' . ( time() + self::LOCK_LEASE_SECONDS );
+		if ( add_option( $lock, $lease, '', false ) ) {
+			return $lease;
 		}
-		$acquired_at = (int) get_option( $lock, 0 );
-		if ( $acquired_at > 0 && $acquired_at + self::LOCK_LEASE_SECONDS < time() ) {
-			delete_option( $lock );
-			return add_option( $lock, time(), '', false );
+		$current = get_option( $lock, '' );
+		$parts   = is_string( $current ) ? explode( ':', $current ) : array();
+		$expires = (int) end( $parts );
+		if ( $expires >= time() || '' === $current ) {
+			return null;
 		}
-		return false;
+		global $wpdb;
+		$deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", $lock, $current ) );
+		return 1 === $deleted && add_option( $lock, $lease, '', false ) ? $lease : null;
+	}
+
+	private static function release_lock( string $lock, string $lease ): void {
+		global $wpdb;
+		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", $lock, $lease ) );
 	}
 
 	private static function ensure_local_refund( WC_Order $order, string $refund_id ): void {
@@ -133,22 +144,31 @@ final class Fynex_WC_Refund_Reconciliation {
 			if ( $refund_id !== ( $refund['id'] ?? '' ) || ! empty( $refund['local_refund_id'] ) ) {
 				continue;
 			}
-			$local_refund = wc_create_refund(
-				array(
+			$marker = static function ( $local_refund, $args ) use ( $refund_id, $order ): void {
+				if ( (int) ( $args['order_id'] ?? 0 ) === (int) $order->get_id() ) {
+					$local_refund->update_meta_data( '_fynex_refund_id', $refund_id );
+				}
+			};
+			add_action( 'woocommerce_create_refund', $marker, 10, 2 );
+			try {
+				$local_refund = wc_create_refund(
+					array(
 					'amount'                 => (float) ( $refund['amount'] ?? 0 ),
 					'reason'                 => (string) ( $refund['reason'] ?? '' ),
 					'order_id'               => $order->get_id(),
 					'refund_payment'         => false,
 					'restock_refunded_items' => false,
-				)
-			);
+					)
+				);
+			} finally {
+				remove_action( 'woocommerce_create_refund', $marker, 10 );
+			}
 			if ( is_wp_error( $local_refund ) ) {
 				$order->update_meta_data( '_fynex_refund_attention', 'yes' );
-				$order->add_order_note( __( 'Fynex confirmed a refund, but WooCommerce could not create its local refund record. Review immediately.', 'fynex-woo-commerce' ) );
+				$order->add_order_note( __( 'Fynex confirmed a refund, but WooCommerce could not create its local refund record. Retrying automatically.', 'fynex-woo-commerce' ) );
+				self::schedule( (int) $order->get_id(), $refund_id );
 				return;
 			}
-			$local_refund->update_meta_data( '_fynex_refund_id', $refund_id );
-			$local_refund->save();
 			self::set_local_refund_id( $order, $refund_id, (int) $local_refund->get_id() );
 			return;
 		}

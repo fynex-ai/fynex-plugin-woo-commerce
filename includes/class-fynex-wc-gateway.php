@@ -157,7 +157,7 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 			return new WP_Error( 'fynex_invalid_refund', __( 'Refund amount must be greater than zero.', 'fynex-woo-commerce' ) );
 		}
 		foreach ( $this->refunds( $order ) as $refund ) {
-			if ( 'pending' !== ( $refund['status'] ?? '' ) ) {
+			if ( ! empty( $refund['local_refund_id'] ) || ! in_array( $refund['status'] ?? '', array( 'pending', 'succeeded' ), true ) ) {
 				continue;
 			}
 			if ( $amount === (float) ( $refund['amount'] ?? 0 ) && (string) $reason === (string) ( $refund['reason'] ?? '' ) ) {
