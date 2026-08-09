@@ -114,6 +114,7 @@ final class Fynex_WC_Refund_Reconciliation {
 
 	private static function acquire_lock( string $lock ): ?string {
 		$lease = wp_generate_uuid4() . ':' . ( time() + self::LOCK_LEASE_SECONDS );
+		self::clear_lock_cache( $lock );
 		if ( add_option( $lock, $lease, '', false ) ) {
 			return $lease;
 		}
@@ -124,13 +125,25 @@ final class Fynex_WC_Refund_Reconciliation {
 			return null;
 		}
 		global $wpdb;
-		$deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", $lock, $current ) );
-		return 1 === $deleted && add_option( $lock, $lease, '', false ) ? $lease : null;
+		$updated = $wpdb->update( $wpdb->options, array( 'option_value' => $lease ), array( 'option_name' => $lock, 'option_value' => $current ), array( '%s' ), array( '%s', '%s' ) );
+		if ( 1 !== $updated ) {
+			return null;
+		}
+		self::clear_lock_cache( $lock );
+		return $lease;
 	}
 
 	private static function release_lock( string $lock, string $lease ): void {
 		global $wpdb;
-		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", $lock, $lease ) );
+		$deleted = $wpdb->delete( $wpdb->options, array( 'option_name' => $lock, 'option_value' => $lease ), array( '%s', '%s' ) );
+		if ( 1 === $deleted ) {
+			self::clear_lock_cache( $lock );
+		}
+	}
+
+	private static function clear_lock_cache( string $lock ): void {
+		wp_cache_delete( $lock, 'options' );
+		wp_cache_delete( $lock, 'notoptions' );
 	}
 
 	private static function ensure_local_refund( WC_Order $order, string $refund_id ): void {
