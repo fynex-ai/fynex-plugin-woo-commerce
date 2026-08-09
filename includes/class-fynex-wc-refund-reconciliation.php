@@ -75,9 +75,7 @@ final class Fynex_WC_Refund_Reconciliation {
 	private static function ensure_local_refund( WC_Order $order, string $refund_id ): void {
 		foreach ( $order->get_refunds() as $local_refund ) {
 			if ( $refund_id === (string) $local_refund->get_meta( '_fynex_refund_id', true ) ) {
-				$local_refund->update_meta_data( '_fynex_refund_id', $refund_id );
-			$local_refund->save();
-			self::set_local_refund_id( $order, $refund_id, (int) $local_refund->get_id() );
+				self::set_local_refund_id( $order, $refund_id, (int) $local_refund->get_id() );
 				return;
 			}
 		}
@@ -99,6 +97,8 @@ final class Fynex_WC_Refund_Reconciliation {
 				$order->add_order_note( __( 'Fynex confirmed a refund, but WooCommerce could not create its local refund record. Review immediately.', 'fynex-woo-commerce' ) );
 				return;
 			}
+			$local_refund->update_meta_data( '_fynex_refund_id', $refund_id );
+			$local_refund->save();
 			self::set_local_refund_id( $order, $refund_id, (int) $local_refund->get_id() );
 			return;
 		}
