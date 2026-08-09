@@ -39,6 +39,12 @@ final class Fynex_WC_Refund_Reconciliation {
 			return;
 		}
 		$status = sanitize_key( (string) ( $response['status'] ?? '' ) );
+		if ( ! self::matches_refund( $order, $refund_id, $response ) ) {
+			$order->update_meta_data( '_fynex_refund_attention', 'yes' );
+			$order->add_order_note( __( 'Fynex refund data did not match the submitted refund. Review before recording it in WooCommerce.', 'fynex-woo-commerce' ) );
+			$order->save();
+			return;
+		}
 		if ( 'succeeded' === $status ) {
 			self::mark_succeeded( $order, $refund_id );
 			$order->delete_meta_data( '_fynex_refund_submission' );
@@ -52,6 +58,35 @@ final class Fynex_WC_Refund_Reconciliation {
 			return;
 		}
 		self::reschedule_if_current( $order, $refund_id );
+	}
+
+
+	/** @param array<string,mixed> $payload */
+	public static function matches_webhook( WC_Order $order, string $refund_id, array $payload ): bool {
+		return self::matches_values(
+			$order,
+			$refund_id,
+			(string) ( $payload['externalOrderRef'] ?? '' ),
+			$payload['refundAmountMinor'] ?? null,
+			(string) ( $payload['currencyCode'] ?? '' )
+		);
+	}
+
+	/** @param array<string,mixed> $response */
+	private static function matches_refund( WC_Order $order, string $refund_id, array $response ): bool {
+		return self::matches_values( $order, $refund_id, (string) ( $response['paymentId'] ?? '' ), isset( $response['amount'] ) ? (int) round( (float) $response['amount'] * 100 ) : null, (string) ( $response['currencyCode'] ?? '' ) );
+	}
+
+	private static function matches_values( WC_Order $order, string $refund_id, string $payment_id, $amount_minor, string $currency ): bool {
+		foreach ( self::refunds( $order ) as $refund ) {
+			if ( $refund_id !== ( $refund['id'] ?? '' ) ) {
+				continue;
+			}
+			return (string) ( $refund['payment_id'] ?? '' ) === $payment_id
+				&& (int) ( $refund['amount_minor'] ?? -1 ) === (int) $amount_minor
+				&& (string) ( $refund['currency'] ?? '' ) === strtoupper( $currency );
+		}
+		return false;
 	}
 
 	public static function mark_succeeded( WC_Order $order, string $refund_id ): void {

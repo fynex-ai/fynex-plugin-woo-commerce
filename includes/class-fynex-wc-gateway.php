@@ -197,7 +197,10 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 			'amount'    => $amount,
 			'status'    => isset( $response['status'] ) ? sanitize_key( (string) $response['status'] ) : 'pending',
 			'createdAt' => time(),
-			'reason'    => sanitize_text_field( (string) $reason ),
+			'reason'       => sanitize_text_field( (string) $reason ),
+			'payment_id'   => $payment_id,
+			'amount_minor' => (int) round( $amount * 100 ),
+			'currency'     => strtoupper( $order->get_currency() ),
 		);
 		$order->update_meta_data( '_fynex_refunds', $refunds );
 		$order->add_order_note( sprintf( __( 'Fynex refund %1$s submitted for %2$s.', 'fynex-woo-commerce' ), $response['id'], wc_price( $amount, array( 'currency' => $order->get_currency() ) ) ) );
