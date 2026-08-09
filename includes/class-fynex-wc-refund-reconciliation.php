@@ -55,9 +55,18 @@ final class Fynex_WC_Refund_Reconciliation {
 	}
 
 	public static function mark_succeeded( WC_Order $order, string $refund_id ): void {
-		if ( self::update_refund_status( $order, $refund_id, 'succeeded' ) ) {
-			self::create_local_refund( $order, $refund_id );
-			$order->add_order_note( sprintf( __( 'Fynex confirmed refund %s.', 'fynex-woo-commerce' ), $refund_id ) );
+		$lock = 'fynex_woo_refund_lock_' . md5( $order->get_id() . ':' . $refund_id );
+		if ( ! add_option( $lock, time(), '', false ) ) {
+			return;
+		}
+		try {
+			if ( self::update_refund_status( $order, $refund_id, 'succeeded' ) ) {
+				self::create_local_refund( $order, $refund_id );
+				$order->add_order_note( sprintf( __( 'Fynex confirmed refund %s.', 'fynex-woo-commerce' ), $refund_id ) );
+				$order->save();
+			}
+		} finally {
+			delete_option( $lock );
 		}
 	}
 
