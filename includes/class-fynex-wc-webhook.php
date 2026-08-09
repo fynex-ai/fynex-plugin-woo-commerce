@@ -99,11 +99,16 @@ final class Fynex_WC_Webhook {
 				return;
 			}
 			self::update_attempt_status( $order, $payment_id, $status );
-			if ( ! $order->is_paid() ) {
-				$order->payment_complete( $payment_id );
-				$order->update_meta_data( '_fynex_paid_payment_id', $payment_id );
-				$order->add_order_note( __( 'Fynex confirmed the payment.', 'fynex-woo-commerce' ) );
+			if ( $order->is_paid() ) {
+				if ( $payment_id !== (string) $order->get_meta( '_fynex_paid_payment_id', true ) ) {
+					$order->update_meta_data( '_fynex_payment_attention', 'yes' );
+					$order->add_order_note( __( 'A second Fynex payment attempt completed after this order was already paid. Review for a duplicate charge.', 'fynex-woo-commerce' ) );
+				}
+				return;
 			}
+			$order->payment_complete( $payment_id );
+			$order->update_meta_data( '_fynex_paid_payment_id', $payment_id );
+			$order->add_order_note( __( 'Fynex confirmed the payment.', 'fynex-woo-commerce' ) );
 			return;
 		}
 

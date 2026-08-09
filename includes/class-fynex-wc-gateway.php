@@ -66,16 +66,15 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		$submitted_secret = trim( (string) $this->get_option( 'webhook_secret' ) );
 		if ( '' !== $submitted_token ) {
 			update_option( 'fynex_woo_api_token', $submitted_token, false );
+			if ( ! hash_equals( $previous_token, $submitted_token ) ) {
+				delete_option( 'fynex_woo_webhook_secret' );
+			}
 		}
 		if ( '' !== $submitted_secret ) {
 			update_option( 'fynex_woo_webhook_secret', $submitted_secret, false );
 		}
 		$this->api_token      = $this->secret_option( 'fynex_woo_api_token', 'api_token' );
 		$this->webhook_secret = $this->secret_option( 'fynex_woo_webhook_secret', 'webhook_secret' );
-		if ( '' !== $submitted_token && ! hash_equals( $previous_token, $this->api_token ) ) {
-			delete_option( 'fynex_woo_webhook_secret' );
-			$this->webhook_secret = '';
-		}
 		unset( $this->settings['api_token'], $this->settings['webhook_secret'] );
 		update_option( $this->get_option_key(), $this->settings, false );
 
