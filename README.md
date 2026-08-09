@@ -46,7 +46,7 @@ by the Fynex token, not by a plugin environment switch.
 ## Scope of v0.1
 
 Included: hosted checkout redirect, Classic/Blocks checkout, signed payment
-webhooks, and per-attempt payment reconciliation.
+webhooks with per-attempt matching and validation.
 
 Not included: manual capture, saved cards, subscriptions, marketplace split
 payments, custom update service, or WordPress.org distribution.
