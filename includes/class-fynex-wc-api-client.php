@@ -35,20 +35,6 @@ final class Fynex_WC_API_Client {
 	/**
 	 * @return array<string, mixed>|WP_Error
 	 */
-	public function refund( string $payment_id, float $amount, string $idempotency_key ) {
-		return $this->request( 'POST', '/payments/' . rawurlencode( $payment_id ) . '/refund', array( 'amount' => $amount ), $idempotency_key );
-	}
-
-	/**
-	 * @return array<string, mixed>|WP_Error
-	 */
-	public function get_refund( string $refund_id ) {
-		return $this->request( 'GET', '/refunds/' . rawurlencode( $refund_id ) );
-	}
-
-	/**
-	 * @return array<string, mixed>|WP_Error
-	 */
 	private function request( string $method, string $path, ?array $body = null, string $idempotency_key = '' ) {
 		if ( '' === $this->token ) {
 			return new WP_Error( 'fynex_missing_token', __( 'Fynex API token is not configured.', 'fynex-woo-commerce' ) );

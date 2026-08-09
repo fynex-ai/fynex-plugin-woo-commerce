@@ -17,8 +17,8 @@ final class Fynex_WC_Blocks_Support extends AbstractPaymentMethodType {
 
 	public function is_active(): bool {
 		return 'yes' === ( $this->settings['enabled'] ?? 'no' )
-			&& ! empty( $this->settings['api_token'] )
-			&& ! empty( $this->settings['webhook_secret'] );
+			&& '' !== trim( (string) get_option( 'fynex_woo_api_token', $this->settings['api_token'] ?? '' ) )
+			&& '' !== trim( (string) get_option( 'fynex_woo_webhook_secret', $this->settings['webhook_secret'] ?? '' ) );
 	}
 
 	public function get_payment_method_script_handles(): array {

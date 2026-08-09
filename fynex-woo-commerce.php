@@ -6,6 +6,7 @@
  * Version: 0.1.0
  * Requires at least: 6.9
  * Requires PHP: 8.1
+ * Requires Plugins: woocommerce
  * Author: Fynex
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,8 +25,6 @@ define( 'FYNEX_WC_URL', plugin_dir_url( __FILE__ ) );
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-webhook-verifier.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-api-client.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-webhook.php';
-require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-refund-reconciliation.php';
-require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-gateway.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-plugin.php';
 
 add_action(

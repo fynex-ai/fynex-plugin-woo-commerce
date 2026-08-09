@@ -8,7 +8,6 @@ Official Fynex hosted-checkout payment gateway for WooCommerce.
 - Keeps WooCommerce order state in sync using signed Fynex webhooks.
 - Supports Classic and Checkout Block payment flows.
 - Supports High-Performance Order Storage (HPOS).
-- Lets staff issue full or partial refunds from WooCommerce admin.
 
 ## Requirements
 
@@ -40,14 +39,14 @@ by the Fynex token, not by a plugin environment switch.
 - If the callback already exists in Fynex but this installation lacks its
   one-time signing secret, paste the original secret or rotate/reconnect the
   callback in Fynex before enabling the gateway.
-- Refund requests can be asynchronous. WooCommerce records the submitted refund
-  immediately; this plugin reconciles Fynex status in the background and adds an
-  order note if Fynex reports a failure or remains pending for 20 minutes.
+- Refunds are intentionally not exposed through WooCommerce in v0.1 because Fynex
+  can process them asynchronously; issue them in Fynex until the plugin has a
+  fully reconciled refund workflow.
 
 ## Scope of v0.1
 
 Included: hosted checkout redirect, Classic/Blocks checkout, signed payment
-webhooks, and full/partial refunds.
+webhooks, and per-attempt payment reconciliation.
 
 Not included: manual capture, saved cards, subscriptions, marketplace split
 payments, custom update service, or WordPress.org distribution.

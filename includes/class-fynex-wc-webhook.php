@@ -42,13 +42,17 @@ final class Fynex_WC_Webhook {
 			return new WP_REST_Response( array( 'received' => true ), 200 );
 		}
 
-		self::apply_event( $order, (string) $event['eventType'], $event['payload'] );
+		self::apply_event( $order, $payment_id, (string) $event['eventType'], $event['payload'] );
 		self::remember_event( $order, (string) $event['eventId'] );
 		$order->save();
 		return new WP_REST_Response( array( 'received' => true ), 200 );
 	}
 
 	private static function webhook_secret(): string {
+		$secret = get_option( 'fynex_woo_webhook_secret', '' );
+		if ( is_string( $secret ) && '' !== $secret ) {
+			return $secret;
+		}
 		$settings = get_option( 'woocommerce_fynex_settings', array() );
 		return is_array( $settings ) ? (string) ( $settings['webhook_secret'] ?? '' ) : '';
 	}
@@ -80,27 +84,78 @@ final class Fynex_WC_Webhook {
 		return isset( $orders[0] ) && $orders[0] instanceof WC_Order ? $orders[0] : null;
 	}
 
+
 	/** @param array<string,mixed> $payload */
-	private static function apply_event( WC_Order $order, string $event_type, array $payload ): void {
-		if ( 'PaymentCompleted' === $event_type ) {
-			$status = sanitize_key( (string) ( $payload['status'] ?? '' ) );
-			if ( 'provider_completed' === $status ) {
-				if ( ! $order->is_paid() ) {
-					$order->payment_complete( (string) $order->get_meta( '_fynex_payment_id', true ) );
-					$order->add_order_note( __( 'Fynex confirmed the payment.', 'fynex-woo-commerce' ) );
-				}
+	private static function apply_event( WC_Order $order, string $payment_id, string $event_type, array $payload ): void {
+		if ( 'PaymentCompleted' !== $event_type ) {
+			return;
+		}
+
+		$status = sanitize_key( (string) ( $payload['status'] ?? '' ) );
+		if ( 'provider_completed' === $status ) {
+			if ( ! self::payment_matches_attempt( $order, $payment_id, $payload ) ) {
+				$order->update_meta_data( '_fynex_payment_attention', 'yes' );
+				$order->add_order_note( __( 'Fynex payment completion did not match the expected attempt amount or currency. Review before fulfilling.', 'fynex-woo-commerce' ) );
 				return;
 			}
-			if ( in_array( $status, array( 'failed', 'cancelled' ), true ) ) {
-				$order->update_meta_data( '_fynex_attempt_terminal', $status );
-				$order->update_status( 'failed', __( 'Fynex reported that the payment did not complete.', 'fynex-woo-commerce' ) );
+			self::update_attempt_status( $order, $payment_id, $status );
+			if ( ! $order->is_paid() ) {
+				$order->payment_complete( $payment_id );
+				$order->update_meta_data( '_fynex_paid_payment_id', $payment_id );
+				$order->add_order_note( __( 'Fynex confirmed the payment.', 'fynex-woo-commerce' ) );
 			}
 			return;
 		}
 
-		if ( 'PaymentRefunded' === $event_type && ! empty( $payload['refundId'] ) ) {
-			Fynex_WC_Refund_Reconciliation::mark_succeeded( $order, (string) $payload['refundId'] );
+		if ( in_array( $status, array( 'failed', 'cancelled' ), true ) ) {
+			self::update_attempt_status( $order, $payment_id, $status );
+			if ( $payment_id === (string) $order->get_meta( '_fynex_current_payment_id', true ) ) {
+				$order->update_meta_data( '_fynex_attempt_terminal', $status );
+				$order->update_status( 'failed', __( 'Fynex reported that the payment did not complete.', 'fynex-woo-commerce' ) );
+			}
 		}
+	}
+
+	/** @param array<string,mixed> $payload */
+	private static function payment_matches_attempt( WC_Order $order, string $payment_id, array $payload ): bool {
+		$attempt = self::attempt( $order, $payment_id );
+		if ( ! is_array( $attempt ) || ! isset( $attempt['amount_minor'], $attempt['currency'] ) ) {
+			return false;
+		}
+		$amount = $payload['amountMinor'] ?? null;
+		if ( ! is_int( $amount ) && ! ( is_string( $amount ) && ctype_digit( $amount ) ) ) {
+			return false;
+		}
+		return (int) $amount === (int) $attempt['amount_minor']
+			&& strtoupper( (string) ( $payload['currencyCode'] ?? '' ) ) === (string) $attempt['currency'];
+	}
+
+	/** @return array<string,mixed>|null */
+	private static function attempt( WC_Order $order, string $payment_id ): ?array {
+		$attempts = $order->get_meta( '_fynex_payment_attempts', true );
+		if ( ! is_array( $attempts ) ) {
+			return null;
+		}
+		foreach ( $attempts as $attempt ) {
+			if ( is_array( $attempt ) && $payment_id === ( $attempt['payment_id'] ?? '' ) ) {
+				return $attempt;
+			}
+		}
+		return null;
+	}
+
+	private static function update_attempt_status( WC_Order $order, string $payment_id, string $status ): void {
+		$attempts = $order->get_meta( '_fynex_payment_attempts', true );
+		if ( ! is_array( $attempts ) ) {
+			return;
+		}
+		foreach ( $attempts as &$attempt ) {
+			if ( is_array( $attempt ) && $payment_id === ( $attempt['payment_id'] ?? '' ) ) {
+				$attempt['status'] = $status;
+			}
+		}
+		unset( $attempt );
+		$order->update_meta_data( '_fynex_payment_attempts', $attempts );
 	}
 
 	private static function was_processed( WC_Order $order, string $event_id ): bool {
