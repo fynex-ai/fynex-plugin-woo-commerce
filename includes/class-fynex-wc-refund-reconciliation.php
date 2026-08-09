@@ -60,18 +60,27 @@ final class Fynex_WC_Refund_Reconciliation {
 			return;
 		}
 		try {
-			if ( self::update_refund_status( $order, $refund_id, 'succeeded' ) ) {
-				self::create_local_refund( $order, $refund_id );
+			$changed = self::update_refund_status( $order, $refund_id, 'succeeded' );
+			self::ensure_local_refund( $order, $refund_id );
+			if ( $changed ) {
 				$order->add_order_note( sprintf( __( 'Fynex confirmed refund %s.', 'fynex-woo-commerce' ), $refund_id ) );
-				$order->save();
 			}
+			$order->save();
 		} finally {
 			delete_option( $lock );
 		}
 	}
 
 
-	private static function create_local_refund( WC_Order $order, string $refund_id ): void {
+	private static function ensure_local_refund( WC_Order $order, string $refund_id ): void {
+		foreach ( $order->get_refunds() as $local_refund ) {
+			if ( $refund_id === (string) $local_refund->get_meta( '_fynex_refund_id', true ) ) {
+				$local_refund->update_meta_data( '_fynex_refund_id', $refund_id );
+			$local_refund->save();
+			self::set_local_refund_id( $order, $refund_id, (int) $local_refund->get_id() );
+				return;
+			}
+		}
 		foreach ( self::refunds( $order ) as $refund ) {
 			if ( $refund_id !== ( $refund['id'] ?? '' ) || ! empty( $refund['local_refund_id'] ) ) {
 				continue;
