@@ -1,0 +1,42 @@
+<?php
+
+defined( 'ABSPATH' ) || exit;
+
+use Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType;
+
+final class Fynex_WC_Blocks_Support extends AbstractPaymentMethodType {
+	protected $name = 'fynex';
+
+	/** @var array<string,mixed> */
+	private array $settings = array();
+
+	public function initialize(): void {
+		$settings       = get_option( 'woocommerce_fynex_settings', array() );
+		$this->settings = is_array( $settings ) ? $settings : array();
+	}
+
+	public function is_active(): bool {
+		return 'yes' === ( $this->settings['enabled'] ?? 'no' )
+			&& ! empty( $this->settings['api_token'] )
+			&& ! empty( $this->settings['webhook_secret'] );
+	}
+
+	public function get_payment_method_script_handles(): array {
+		wp_register_script(
+			'fynex-wc-blocks',
+			FYNEX_WC_URL . 'assets/js/blocks.js',
+			array( 'wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-html-entities' ),
+			FYNEX_WC_VERSION,
+			true
+		);
+		return array( 'fynex-wc-blocks' );
+	}
+
+	public function get_payment_method_data(): array {
+		return array(
+			'title'       => $this->settings['title'] ?? __( 'Fynex', 'fynex-woo-commerce' ),
+			'description' => $this->settings['description'] ?? __( 'Pay securely on Fynex hosted checkout.', 'fynex-woo-commerce' ),
+			'supports'    => array( 'products' ),
+		);
+	}
+}

@@ -1,0 +1,24 @@
+name: Plugin checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      - name: PHP syntax and webhook tests
+        run: ./bin/test-docker
+      - name: Build installable plugin zip
+        run: ./bin/package
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: fynex-woo-commerce
+          path: dist/fynex-woo-commerce.zip
+          if-no-files-found: error

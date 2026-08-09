@@ -1,0 +1,257 @@
+<?php
+
+defined( 'ABSPATH' ) || exit;
+
+final class Fynex_WC_Gateway extends WC_Payment_Gateway {
+	private string $api_token;
+	private string $webhook_secret;
+
+	public function __construct() {
+		$this->id                 = 'fynex';
+		$this->method_title       = __( 'Fynex', 'fynex-woo-commerce' );
+		$this->method_description = __( 'Redirect customers to Fynex hosted checkout. Card data never reaches this store.', 'fynex-woo-commerce' );
+		$this->has_fields         = false;
+		$this->supports           = array( 'products', 'refunds' );
+
+		$this->init_form_fields();
+		$this->init_settings();
+		$this->title          = (string) $this->get_option( 'title', __( 'Fynex', 'fynex-woo-commerce' ) );
+		$this->description    = (string) $this->get_option( 'description', __( 'Pay securely on Fynex hosted checkout.', 'fynex-woo-commerce' ) );
+		$this->api_token      = (string) $this->get_option( 'api_token' );
+		$this->webhook_secret = (string) $this->get_option( 'webhook_secret' );
+		$this->enabled        = (string) $this->get_option( 'enabled', 'no' );
+
+		add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
+	}
+
+	public function init_form_fields(): void {
+		$this->form_fields = array(
+			'enabled'        => array(
+				'title'   => __( 'Enable/Disable', 'fynex-woo-commerce' ),
+				'type'    => 'checkbox',
+				'label'   => __( 'Enable Fynex payments', 'fynex-woo-commerce' ),
+				'default' => 'no',
+			),
+			'title'          => array(
+				'title'       => __( 'Title', 'fynex-woo-commerce' ),
+				'type'        => 'text',
+				'default'     => __( 'Fynex', 'fynex-woo-commerce' ),
+				'desc_tip'    => true,
+				'description' => __( 'Shown to customers at checkout.', 'fynex-woo-commerce' ),
+			),
+			'description'    => array(
+				'title'       => __( 'Description', 'fynex-woo-commerce' ),
+				'type'        => 'textarea',
+				'default'     => __( 'Pay securely on Fynex hosted checkout.', 'fynex-woo-commerce' ),
+				'description' => __( 'Card details are entered on Fynex, not on this store.', 'fynex-woo-commerce' ),
+			),
+			'api_token'      => array(
+				'title'       => __( 'Fynex API token', 'fynex-woo-commerce' ),
+				'type'        => 'password',
+				'description' => __( 'Seller token from Fynex. This plugin always uses api.fynex.ai; there is no environment setting.', 'fynex-woo-commerce' ),
+			),
+			'webhook_secret' => array(
+				'title'       => __( 'Webhook signing secret', 'fynex-woo-commerce' ),
+				'type'        => 'password',
+				'description' => __( 'Saved automatically when this plugin registers its callback. If the callback already exists, paste its signing secret here.', 'fynex-woo-commerce' ),
+			),
+		);
+	}
+
+	public function process_admin_options(): bool {
+		$result = parent::process_admin_options();
+		$this->init_settings();
+		$this->api_token      = (string) $this->get_option( 'api_token' );
+		$this->webhook_secret = (string) $this->get_option( 'webhook_secret' );
+
+		if ( $result && '' !== trim( $this->api_token ) ) {
+			$this->ensure_webhook_registration();
+		}
+		return $result;
+	}
+
+	public function process_payment( $order_id ): array {
+		$order = wc_get_order( $order_id );
+		if ( ! $order instanceof WC_Order ) {
+			return array( 'result' => 'failure' );
+		}
+		if ( '' === trim( $this->api_token ) || '' === trim( $this->webhook_secret ) ) {
+			wc_add_notice( __( 'Fynex is not fully configured. Please contact the store administrator.', 'fynex-woo-commerce' ), 'error' );
+			return array( 'result' => 'failure' );
+		}
+
+		$attempt = $this->prepare_payment_attempt( $order );
+		$payload = array(
+			'externalOrderRef' => $attempt['payment_id'],
+			'amount'           => (float) $order->get_total(),
+			'currencyCode'     => $order->get_currency(),
+			'countryCode'      => $this->country_code( $order ),
+			'autoSettlement'   => true,
+			'returnUrls'       => array(
+				'success' => $this->get_return_url( $order ),
+				'failure' => $order->get_checkout_payment_url( true ),
+			),
+			'description'      => sprintf( __( 'Order #%s', 'fynex-woo-commerce' ), $order->get_order_number() ),
+		);
+
+		$client  = new Fynex_WC_API_Client( $this->api_token );
+		$response = $client->create_checkout( $payload, $attempt['idempotency_key'] );
+		if ( is_wp_error( $response ) || empty( $response['checkoutUrl'] ) || ! is_string( $response['checkoutUrl'] ) ) {
+			$order->add_order_note( __( 'Fynex checkout session could not be created.', 'fynex-woo-commerce' ) );
+			wc_add_notice( __( 'Unable to start Fynex checkout. Please try again.', 'fynex-woo-commerce' ), 'error' );
+			return array( 'result' => 'failure' );
+		}
+
+		$order->update_meta_data( '_fynex_checkout_url', esc_url_raw( $response['checkoutUrl'] ) );
+		if ( isset( $response['expiresAt'] ) && is_string( $response['expiresAt'] ) ) {
+			$order->update_meta_data( '_fynex_checkout_expires_at', sanitize_text_field( $response['expiresAt'] ) );
+		}
+		$order->update_status( 'pending', __( 'Awaiting Fynex payment.', 'fynex-woo-commerce' ) );
+		$order->save();
+		WC()->cart->empty_cart();
+
+		return array(
+			'result'   => 'success',
+			'redirect' => esc_url_raw( $response['checkoutUrl'] ),
+		);
+	}
+
+	/**
+	 * @return bool|WP_Error
+	 */
+	public function process_refund( $order_id, $amount = null, $reason = '' ) {
+		$order = wc_get_order( $order_id );
+		if ( ! $order instanceof WC_Order || '' === trim( $this->api_token ) ) {
+			return new WP_Error( 'fynex_refund_unavailable', __( 'Fynex refund is unavailable.', 'fynex-woo-commerce' ) );
+		}
+		$payment_id = (string) $order->get_meta( '_fynex_payment_id', true );
+		if ( '' === $payment_id ) {
+			return new WP_Error( 'fynex_missing_payment', __( 'No Fynex payment is associated with this order.', 'fynex-woo-commerce' ) );
+		}
+
+		$amount = null === $amount ? (float) $order->get_total() : (float) $amount;
+		if ( $amount <= 0 ) {
+			return new WP_Error( 'fynex_invalid_refund', __( 'Refund amount must be greater than zero.', 'fynex-woo-commerce' ) );
+		}
+		$submission = $this->refund_submission( $order, $amount, (string) $reason );
+		$response   = ( new Fynex_WC_API_Client( $this->api_token ) )->refund( $payment_id, $amount, $submission['idempotency_key'] );
+		if ( is_wp_error( $response ) ) {
+			$error_data = $response->get_error_data();
+			$status     = is_array( $error_data ) ? (int) ( $error_data['status'] ?? 0 ) : 0;
+			if ( $status >= 400 && $status < 500 && 408 !== $status && 429 !== $status ) {
+				$order->delete_meta_data( '_fynex_refund_submission' );
+				$order->save();
+			}
+			return $response;
+		}
+		if ( empty( $response['id'] ) || ! is_string( $response['id'] ) ) {
+			return new WP_Error( 'fynex_invalid_refund_response', __( 'Fynex returned an invalid refund response.', 'fynex-woo-commerce' ) );
+		}
+
+		if ( in_array( sanitize_key( (string) ( $response['status'] ?? '' ) ), array( 'failed', 'cancelled' ), true ) ) {
+			$order->delete_meta_data( '_fynex_refund_submission' );
+			$order->save();
+			return new WP_Error( 'fynex_refund_rejected', __( 'Fynex rejected this refund.', 'fynex-woo-commerce' ) );
+		}
+
+		$order->delete_meta_data( '_fynex_refund_submission' );
+		$refunds   = $this->refunds( $order );
+		$refunds[] = array(
+			'id'        => sanitize_text_field( $response['id'] ),
+			'amount'    => $amount,
+			'status'    => isset( $response['status'] ) ? sanitize_key( (string) $response['status'] ) : 'pending',
+			'createdAt' => time(),
+		);
+		$order->update_meta_data( '_fynex_refunds', $refunds );
+		$order->add_order_note( sprintf( __( 'Fynex refund %1$s submitted for %2$s.', 'fynex-woo-commerce' ), $response['id'], wc_price( $amount, array( 'currency' => $order->get_currency() ) ) ) );
+		$order->save();
+
+		if ( 'pending' === ( $response['status'] ?? 'pending' ) ) {
+			Fynex_WC_Refund_Reconciliation::schedule( (int) $order->get_id(), (string) $response['id'] );
+		}
+		return true;
+	}
+
+	private function prepare_payment_attempt( WC_Order $order ): array {
+		$terminal = (string) $order->get_meta( '_fynex_attempt_terminal', true );
+		$payment  = (string) $order->get_meta( '_fynex_payment_id', true );
+		$key      = (string) $order->get_meta( '_fynex_idempotency_key', true );
+		$expires_at = strtotime( (string) $order->get_meta( '_fynex_checkout_expires_at', true ) );
+		if ( '' !== $payment && '' !== $key && '' === $terminal && ( false === $expires_at || $expires_at > time() ) ) {
+			return array( 'payment_id' => $payment, 'idempotency_key' => $key );
+		}
+
+		$attempt = max( 0, (int) $order->get_meta( '_fynex_attempt', true ) ) + 1;
+		$payment = sprintf( 'wc-%d-%d', $order->get_id(), $attempt );
+		$key     = wp_generate_uuid4();
+		$order->update_meta_data( '_fynex_attempt', $attempt );
+		$order->update_meta_data( '_fynex_payment_id', $payment );
+		$order->update_meta_data( '_fynex_idempotency_key', $key );
+		$order->delete_meta_data( '_fynex_attempt_terminal' );
+		$order->delete_meta_data( '_fynex_checkout_expires_at' );
+		$order->set_transaction_id( $payment );
+		$order->save();
+		return array( 'payment_id' => $payment, 'idempotency_key' => $key );
+	}
+
+	private function refund_submission( WC_Order $order, float $amount, string $reason ): array {
+		$stored = $order->get_meta( '_fynex_refund_submission', true );
+		if ( is_array( $stored ) && isset( $stored['idempotency_key'], $stored['amount'], $stored['reason'] ) && (float) $stored['amount'] === $amount && (string) $stored['reason'] === $reason ) {
+			return $stored;
+		}
+		$submission = array( 'idempotency_key' => wp_generate_uuid4(), 'amount' => $amount, 'reason' => $reason );
+		$order->update_meta_data( '_fynex_refund_submission', $submission );
+		$order->save();
+		return $submission;
+	}
+
+	private function refunds( WC_Order $order ): array {
+		$refunds = $order->get_meta( '_fynex_refunds', true );
+		return is_array( $refunds ) ? $refunds : array();
+	}
+
+	private function country_code( WC_Order $order ): string {
+		$country = strtoupper( (string) $order->get_billing_country() );
+		return preg_match( '/^[A-Z]{2}$/', $country ) ? $country : '';
+	}
+
+	private function ensure_webhook_registration(): void {
+		$client   = new Fynex_WC_API_Client( $this->api_token );
+		$endpoint = rest_url( 'fynex/v1/webhook' );
+		$list     = $client->list_webhooks();
+		if ( is_wp_error( $list ) ) {
+			$this->admin_error( __( 'Fynex webhook could not be checked. Verify the API token and try saving again.', 'fynex-woo-commerce' ) );
+			return;
+		}
+		foreach ( (array) ( $list['webhooks'] ?? array() ) as $webhook ) {
+			if ( ! is_array( $webhook ) || ( $webhook['webhookUrl'] ?? '' ) !== $endpoint ) {
+				continue;
+			}
+			if ( 'active' === ( $webhook['status'] ?? '' ) && '' === trim( $this->webhook_secret ) ) {
+				$this->admin_error( __( 'The Fynex callback is already active but its one-time signing secret is not stored here. Paste the secret from the original registration or rotate it in Fynex before enabling this gateway.', 'fynex-woo-commerce' ) );
+				return;
+			}
+			if ( 'active' === ( $webhook['status'] ?? '' ) ) {
+				return;
+			}
+		}
+
+		$created = $client->create_webhook( $endpoint );
+		if ( is_wp_error( $created ) || empty( $created['secretKey'] ) || ! is_string( $created['secretKey'] ) ) {
+			$this->admin_error( __( 'Fynex webhook registration failed. The gateway remains disabled until a signing secret is configured.', 'fynex-woo-commerce' ) );
+			return;
+		}
+		$this->settings['webhook_secret'] = $created['secretKey'];
+		update_option( $this->get_option_key(), $this->settings, false );
+		$this->webhook_secret = $created['secretKey'];
+		$this->admin_success( __( 'Fynex webhook registered and signing secret saved.', 'fynex-woo-commerce' ) );
+	}
+
+	private function admin_error( string $message ): void {
+		WC_Admin_Settings::add_error( $message );
+	}
+
+	private function admin_success( string $message ): void {
+		WC_Admin_Settings::add_message( $message );
+	}
+}
