@@ -11,7 +11,7 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		$this->method_title       = __( 'Fynex', 'fynex-woo-commerce' );
 		$this->method_description = __( 'Redirect customers to Fynex hosted checkout. Card data never reaches this store.', 'fynex-woo-commerce' );
 		$this->has_fields         = false;
-		$this->supports           = array( 'products' );
+		$this->supports           = array( 'products', 'refunds' );
 
 		$this->init_form_fields();
 		$this->init_settings();
@@ -134,6 +134,87 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 			'result'   => 'success',
 			'redirect' => esc_url_raw( $response['checkoutUrl'] ),
 		);
+	}
+
+	/**
+	 * @return bool|WP_Error
+	 */
+	public function process_refund( $order_id, $amount = null, $reason = '' ) {
+		$order = wc_get_order( $order_id );
+		if ( ! $order instanceof WC_Order || '' === trim( $this->api_token ) ) {
+			return new WP_Error( 'fynex_refund_unavailable', __( 'Fynex refund is unavailable.', 'fynex-woo-commerce' ) );
+		}
+		$payment_id = (string) $order->get_meta( '_fynex_paid_payment_id', true );
+		if ( '' === $payment_id ) {
+			$payment_id = (string) $order->get_transaction_id();
+		}
+		if ( '' === $payment_id ) {
+			return new WP_Error( 'fynex_missing_payment', __( 'No Fynex payment is associated with this order.', 'fynex-woo-commerce' ) );
+		}
+
+		$amount = null === $amount ? (float) $order->get_total() : (float) $amount;
+		if ( $amount <= 0 ) {
+			return new WP_Error( 'fynex_invalid_refund', __( 'Refund amount must be greater than zero.', 'fynex-woo-commerce' ) );
+		}
+		$submission = $this->refund_submission( $order, $amount, (string) $reason );
+		$response   = ( new Fynex_WC_API_Client( $this->api_token ) )->refund( $payment_id, $amount, $submission['idempotency_key'] );
+		if ( is_wp_error( $response ) ) {
+			$error_data = $response->get_error_data();
+			$status     = is_array( $error_data ) ? (int) ( $error_data['status'] ?? 0 ) : 0;
+			if ( $status >= 400 && $status < 500 && 408 !== $status && 429 !== $status ) {
+				$order->delete_meta_data( '_fynex_refund_submission' );
+				$order->save();
+			}
+			return $response;
+		}
+		if ( empty( $response['id'] ) || ! is_string( $response['id'] ) ) {
+			return new WP_Error( 'fynex_invalid_refund_response', __( 'Fynex returned an invalid refund response.', 'fynex-woo-commerce' ) );
+		}
+
+		if ( in_array( sanitize_key( (string) ( $response['status'] ?? '' ) ), array( 'failed', 'cancelled' ), true ) ) {
+			$order->delete_meta_data( '_fynex_refund_submission' );
+			$order->save();
+			return new WP_Error( 'fynex_refund_rejected', __( 'Fynex rejected this refund.', 'fynex-woo-commerce' ) );
+		}
+
+		$order->delete_meta_data( '_fynex_refund_submission' );
+		if ( 'succeeded' === ( $response['status'] ?? '' ) ) {
+			$order->save();
+			return true;
+		}
+		$refunds   = $this->refunds( $order );
+		$refunds[] = array(
+			'id'        => sanitize_text_field( $response['id'] ),
+			'amount'    => $amount,
+			'status'    => isset( $response['status'] ) ? sanitize_key( (string) $response['status'] ) : 'pending',
+			'createdAt' => time(),
+			'reason'    => sanitize_text_field( (string) $reason ),
+		);
+		$order->update_meta_data( '_fynex_refunds', $refunds );
+		$order->add_order_note( sprintf( __( 'Fynex refund %1$s submitted for %2$s.', 'fynex-woo-commerce' ), $response['id'], wc_price( $amount, array( 'currency' => $order->get_currency() ) ) ) );
+		$order->save();
+
+		if ( 'pending' === ( $response['status'] ?? '' ) ) {
+			Fynex_WC_Refund_Reconciliation::schedule( (int) $order->get_id(), (string) $response['id'] );
+			return new WP_Error( 'fynex_refund_pending', __( 'Fynex accepted the refund and it is pending confirmation. WooCommerce will record it after Fynex confirms it.', 'fynex-woo-commerce' ) );
+		}
+		return new WP_Error( 'fynex_unknown_refund_status', __( 'Fynex returned an unknown refund status. The refund has not been recorded in WooCommerce.', 'fynex-woo-commerce' ) );
+	}
+
+	private function refund_submission( WC_Order $order, float $amount, string $reason ): array {
+		$stored = $order->get_meta( '_fynex_refund_submission', true );
+		if ( is_array( $stored ) && isset( $stored['idempotency_key'], $stored['amount'], $stored['reason'] ) && (float) $stored['amount'] === $amount && (string) $stored['reason'] === $reason ) {
+			return $stored;
+		}
+		$submission = array( 'idempotency_key' => wp_generate_uuid4(), 'amount' => $amount, 'reason' => $reason );
+		$order->update_meta_data( '_fynex_refund_submission', $submission );
+		$order->save();
+		return $submission;
+	}
+
+	private function refunds( WC_Order $order ): array {
+		$refunds = $order->get_meta( '_fynex_refunds', true );
+		return is_array( $refunds ) ? $refunds : array();
 	}
 
 	private function prepare_payment_attempt( WC_Order $order ): array {

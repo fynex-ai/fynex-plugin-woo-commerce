@@ -25,6 +25,7 @@ define( 'FYNEX_WC_URL', plugin_dir_url( __FILE__ ) );
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-webhook-verifier.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-api-client.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-webhook.php';
+require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-refund-reconciliation.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-plugin.php';
 
 add_action(

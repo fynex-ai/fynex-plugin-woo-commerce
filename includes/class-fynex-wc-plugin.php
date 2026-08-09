@@ -12,6 +12,7 @@ final class Fynex_WC_Plugin {
 		require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-gateway.php';
 
 		Fynex_WC_Webhook::register();
+		Fynex_WC_Refund_Reconciliation::register();
 		add_filter( 'woocommerce_payment_gateways', array( __CLASS__, 'register_gateway' ) );
 		add_action( 'woocommerce_blocks_loaded', array( __CLASS__, 'register_blocks' ) );
 	}

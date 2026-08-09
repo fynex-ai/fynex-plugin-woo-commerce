@@ -87,6 +87,10 @@ final class Fynex_WC_Webhook {
 
 	/** @param array<string,mixed> $payload */
 	private static function apply_event( WC_Order $order, string $payment_id, string $event_type, array $payload ): void {
+		if ( 'PaymentRefunded' === $event_type && ! empty( $payload['refundId'] ) ) {
+			Fynex_WC_Refund_Reconciliation::mark_succeeded( $order, (string) $payload['refundId'] );
+			return;
+		}
 		if ( 'PaymentCompleted' !== $event_type ) {
 			return;
 		}

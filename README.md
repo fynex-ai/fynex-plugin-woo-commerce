@@ -39,14 +39,14 @@ by the Fynex token, not by a plugin environment switch.
 - If the callback already exists in Fynex but this installation lacks its
   one-time signing secret, paste the original secret or rotate/reconnect the
   callback in Fynex before enabling the gateway.
-- Refunds are intentionally not exposed through WooCommerce in v0.1 because Fynex
-  can process them asynchronously; issue them in Fynex until the plugin has a
-  fully reconciled refund workflow.
+- Full and partial refunds submitted from WooCommerce may remain pending until
+  Fynex confirms them. The plugin creates the WooCommerce refund only after that
+  confirmation; pending refunds do not automatically restock inventory.
 
 ## Scope of v0.1
 
 Included: hosted checkout redirect, Classic/Blocks checkout, signed payment
-webhooks with per-attempt matching and validation.
+webhooks with per-attempt matching and validation, and reconciled full/partial refunds.
 
 Not included: manual capture, saved cards, subscriptions, marketplace split
 payments, custom update service, or WordPress.org distribution.
