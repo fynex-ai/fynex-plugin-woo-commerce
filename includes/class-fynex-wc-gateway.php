@@ -156,6 +156,15 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		if ( $amount <= 0 ) {
 			return new WP_Error( 'fynex_invalid_refund', __( 'Refund amount must be greater than zero.', 'fynex-woo-commerce' ) );
 		}
+		foreach ( $this->refunds( $order ) as $refund ) {
+			if ( 'pending' !== ( $refund['status'] ?? '' ) ) {
+				continue;
+			}
+			if ( $amount === (float) ( $refund['amount'] ?? 0 ) && (string) $reason === (string) ( $refund['reason'] ?? '' ) ) {
+				return new WP_Error( 'fynex_refund_pending', __( 'This Fynex refund is already pending confirmation.', 'fynex-woo-commerce' ) );
+			}
+			return new WP_Error( 'fynex_refund_pending', __( 'Another Fynex refund is pending confirmation for this order.', 'fynex-woo-commerce' ) );
+		}
 		$submission = $this->refund_submission( $order, $amount, (string) $reason );
 		$response   = ( new Fynex_WC_API_Client( $this->api_token ) )->refund( $payment_id, $amount, $submission['idempotency_key'] );
 		if ( is_wp_error( $response ) ) {

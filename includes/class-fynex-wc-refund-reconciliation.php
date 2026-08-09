@@ -24,8 +24,11 @@ final class Fynex_WC_Refund_Reconciliation {
 		if ( ! $order instanceof WC_Order ) {
 			return;
 		}
-		$settings = get_option( 'woocommerce_fynex_settings', array() );
-		$token    = is_array( $settings ) ? (string) ( $settings['api_token'] ?? '' ) : '';
+		$token = (string) get_option( 'fynex_woo_api_token', '' );
+		if ( '' === $token ) {
+			$settings = get_option( 'woocommerce_fynex_settings', array() );
+			$token    = is_array( $settings ) ? (string) ( $settings['api_token'] ?? '' ) : '';
+		}
 		if ( '' === trim( $token ) ) {
 			return;
 		}
@@ -38,11 +41,13 @@ final class Fynex_WC_Refund_Reconciliation {
 		$status = sanitize_key( (string) ( $response['status'] ?? '' ) );
 		if ( 'succeeded' === $status ) {
 			self::mark_succeeded( $order, $refund_id );
+			$order->delete_meta_data( '_fynex_refund_submission' );
 			$order->save();
 			return;
 		}
 		if ( in_array( $status, array( 'failed', 'cancelled' ), true ) ) {
 			self::mark_failed( $order, $refund_id );
+			$order->delete_meta_data( '_fynex_refund_submission' );
 			$order->save();
 			return;
 		}
