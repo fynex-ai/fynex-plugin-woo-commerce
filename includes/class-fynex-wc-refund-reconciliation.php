@@ -6,6 +6,7 @@ final class Fynex_WC_Refund_Reconciliation {
 	private const ACTION = 'fynex_woo_reconcile_refund';
 	private const GROUP  = 'fynex-woo-commerce';
 	private const MAX_AGE_SECONDS = 1200;
+	private const LOCK_LEASE_SECONDS = 300;
 
 	public static function register(): void {
 		add_action( self::ACTION, array( __CLASS__, 'reconcile' ), 10, 2 );
@@ -91,7 +92,8 @@ final class Fynex_WC_Refund_Reconciliation {
 
 	public static function mark_succeeded( WC_Order $order, string $refund_id ): void {
 		$lock = 'fynex_woo_refund_lock_' . md5( $order->get_id() . ':' . $refund_id );
-		if ( ! add_option( $lock, time(), '', false ) ) {
+		if ( ! self::acquire_lock( $lock ) ) {
+			self::schedule( (int) $order->get_id(), $refund_id );
 			return;
 		}
 		try {
@@ -106,6 +108,19 @@ final class Fynex_WC_Refund_Reconciliation {
 		}
 	}
 
+
+
+	private static function acquire_lock( string $lock ): bool {
+		if ( add_option( $lock, time(), '', false ) ) {
+			return true;
+		}
+		$acquired_at = (int) get_option( $lock, 0 );
+		if ( $acquired_at > 0 && $acquired_at + self::LOCK_LEASE_SECONDS < time() ) {
+			delete_option( $lock );
+			return add_option( $lock, time(), '', false );
+		}
+		return false;
+	}
 
 	private static function ensure_local_refund( WC_Order $order, string $refund_id ): void {
 		foreach ( $order->get_refunds() as $local_refund ) {

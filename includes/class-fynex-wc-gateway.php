@@ -187,15 +187,11 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		}
 
 		$order->delete_meta_data( '_fynex_refund_submission' );
-		if ( 'succeeded' === ( $response['status'] ?? '' ) ) {
-			$order->save();
-			return true;
-		}
 		$refunds   = $this->refunds( $order );
 		$refunds[] = array(
 			'id'        => sanitize_text_field( $response['id'] ),
 			'amount'    => $amount,
-			'status'    => isset( $response['status'] ) ? sanitize_key( (string) $response['status'] ) : 'pending',
+			'status'    => 'pending',
 			'createdAt' => time(),
 			'reason'       => sanitize_text_field( (string) $reason ),
 			'payment_id'   => $payment_id,
@@ -206,11 +202,8 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		$order->add_order_note( sprintf( __( 'Fynex refund %1$s submitted for %2$s.', 'fynex-woo-commerce' ), $response['id'], wc_price( $amount, array( 'currency' => $order->get_currency() ) ) ) );
 		$order->save();
 
-		if ( 'pending' === ( $response['status'] ?? '' ) ) {
-			Fynex_WC_Refund_Reconciliation::schedule( (int) $order->get_id(), (string) $response['id'] );
-			return new WP_Error( 'fynex_refund_pending', __( 'Fynex accepted the refund and it is pending confirmation. WooCommerce will record it after Fynex confirms it.', 'fynex-woo-commerce' ) );
-		}
-		return new WP_Error( 'fynex_unknown_refund_status', __( 'Fynex returned an unknown refund status. The refund has not been recorded in WooCommerce.', 'fynex-woo-commerce' ) );
+		Fynex_WC_Refund_Reconciliation::schedule( (int) $order->get_id(), (string) $response['id'] );
+		return new WP_Error( 'fynex_refund_pending', __( 'Fynex accepted the refund. WooCommerce will record it after it is reconciled with Fynex.', 'fynex-woo-commerce' ) );
 	}
 
 	private function refund_submission( WC_Order $order, float $amount, string $reason ): array {
