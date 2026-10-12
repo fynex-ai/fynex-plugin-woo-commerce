@@ -40,6 +40,25 @@ final class CheckoutTest extends Fynex_Test_Case {
 		$this->assertNotSame( '', $payment_id );
 	}
 
+	public function test_misconfigured_gateway_refuses_the_payment_without_calling_fynex(): void {
+		delete_option( 'fynex_woo_webhook_secret' );
+
+		$result = $this->gateway()->process_payment( $this->create_order()->get_id() );
+
+		$this->assertSame( 'failure', $result['result'] );
+		$this->assertSame( array(), $this->api_requests );
+	}
+
+	public function test_fynex_error_keeps_the_order_unpaid_and_reports_it(): void {
+		$this->respond( 'POST', '/checkout', 422, array( 'error' => 'currency not enabled' ) );
+		$order = $this->create_order();
+
+		$result = $this->gateway()->process_payment( $order->get_id() );
+
+		$this->assertSame( 'failure', $result['result'] );
+		$this->assertFalse( wc_get_order( $order->get_id() )->is_paid() );
+	}
+
 	public function test_successful_redirect_schedules_a_status_check(): void {
 		$order      = $this->create_order();
 		$payment_id = $this->start_checkout( $order );

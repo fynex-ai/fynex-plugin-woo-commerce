@@ -4,7 +4,7 @@ Tags: woocommerce, payments, payment gateway, hosted checkout, credit card
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.1.0
+Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -90,7 +90,22 @@ No. Card details are entered on the Fynex-hosted page. Your store keeps only the
 
 == Changelog ==
 
+= 1.0.0 =
+* Fynex now appears in the Checkout block (it was never registered there before).
+* The basket is kept when a customer leaves the hosted page; a cancelled customer can pay again from the pay-for-order page.
+* Orders are marked paid from `lifecycleStatus`, ready for Fynex's change to the `status` field.
+* If a webhook is lost, the payment status is read when the customer returns and every five minutes for an hour.
+* Accepted refunds are recorded at once instead of showing an error; a refund that fails later is flagged with the record to delete.
+* Webhook registration subscribes only to payment and refund events and replaces a callback whose secret was lost.
+* Debug log, demo/live indicator, translations, uninstall cleanup, privacy-policy text.
+* Requires PHP 7.4+, WordPress 6.9+, WooCommerce 10.9+. The plugin folder is now `fynex-for-woocommerce`.
+
 = 0.1.0 =
 * Initial preview: hosted checkout gateway for classic and block checkout, HPOS, signed webhooks, refunds.
 
 See changelog.txt for the full history.
+
+== Upgrade Notice ==
+
+= 1.0.0 =
+The plugin folder changed from fynex-woo-commerce to fynex-for-woocommerce: deactivate and delete 0.1.0, then install 1.0.0. Settings and orders carry over.

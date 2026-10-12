@@ -114,6 +114,21 @@ final class RefundTest extends Fynex_Test_Case {
 		$this->assertStringContainsString( 'Delete WooCommerce refund #' . $local->get_id(), implode( "\n", $notes ) );
 	}
 
+	public function test_reconciliation_waits_while_the_order_is_busy(): void {
+		list( $order, $payment_id ) = $this->paid_order();
+		$refund_id                  = wp_generate_uuid4();
+		$this->respond( 'POST', '/payments/' . $payment_id . '/refund', 201, $this->refund_response( $refund_id, $payment_id, 'pending', 10.0 ) );
+		$this->refund_from_order_screen( $order, '10.00' );
+		as_unschedule_all_actions( 'fynex_woo_reconcile_refund' );
+		$this->api_requests = array();
+		Fynex_WC_Lock::acquire( Fynex_WC_Payment_Outcome::lock_name( $order->get_id() ), 60 );
+
+		Fynex_WC_Refund_Reconciliation::reconcile( $order->get_id(), $refund_id );
+
+		$this->assertSame( array(), $this->requests_to( 'GET', '/refunds/' ) );
+		$this->assertTrue( as_has_scheduled_action( 'fynex_woo_reconcile_refund', array( $order->get_id(), $refund_id ), 'fynex-for-woocommerce' ) );
+	}
+
 	public function test_refund_rejected_by_fynex_leaves_no_record(): void {
 		list( $order, $payment_id ) = $this->paid_order();
 		$this->respond( 'POST', '/payments/' . $payment_id . '/refund', 409, array( 'error' => 'refund is already in progress' ) );

@@ -1,4 +1,23 @@
 *** Fynex for WooCommerce Changelog ***
 
+2026-10-08 - version 1.0.0
+* Fix - Fynex is offered in the Checkout block. The Blocks integration was registered after WooCommerce had loaded Blocks, and its class redeclared a parent property in a way that would fatal.
+* Fix - The basket is no longer emptied when the customer is sent to the hosted page; WooCommerce empties it on the order-received page.
+* Fix - A customer who cancels on the hosted page returns to the pay-for-order form instead of a receipt page with no way to pay.
+* Fix - Payment results are read from lifecycleStatus, with status as the fallback, so orders keep being marked paid after Fynex switches status to the lifecycle values.
+* Add - The order-received page and a background check (every 5 minutes for an hour) read the payment status from Fynex, so a lost webhook cannot leave a paid order pending.
+* Add - One per-order lock for webhooks, status checks, refunds and reconciliation.
+* Tweak - Webhook registration subscribes to PaymentCompleted and PaymentRefunded only, refuses non-HTTPS addresses, and replaces an active callback whose signing secret is missing.
+* Tweak - Payment references include a short hash of the site address, so a staging copy on the same key cannot collide.
+* Tweak - Accepted refunds are recorded at once and tagged with the Fynex refund ID; a refund that fails later is flagged with a note naming the record to delete.
+* Add - Debug log under WooCommerce → Status → Logs; errors are always logged.
+* Add - The settings screen shows whether the saved key is demo or live; demo checkouts say "Test mode".
+* Add - Translations: Domain Path, POT file, script translations.
+* Add - uninstall.php removes settings, lock rows and scheduled jobs; order data stays.
+* Add - Privacy-policy suggestion and a WordPress.org readme that lists the data sent to Fynex.
+* Dev - Requires PHP 7.4+ (was 8.1), WordPress 6.9+, WooCommerce 10.9+; tested up to WordPress 7.1 and WooCommerce 11.2.
+* Dev - Renamed to fynex-for-woocommerce (folder, main file, text domain, zip). Gateway ID and option names are unchanged.
+* Dev - PHPUnit suite on real WordPress and WooCommerce (post storage and HPOS), WooCommerce coding standards and PHP 7.4 compatibility in CI.
+
 2026-08-09 - version 0.1.0
 * Initial preview: hosted checkout gateway, Classic and Checkout Block support, HPOS compatibility, signed webhooks, payment-attempt integrity checks, reconciled full and partial refunds.
