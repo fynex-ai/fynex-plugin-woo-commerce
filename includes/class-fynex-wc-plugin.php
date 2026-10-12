@@ -15,6 +15,7 @@ final class Fynex_WC_Plugin {
 		Fynex_WC_Payment_Check::register();
 		Fynex_WC_Refund_Reconciliation::register();
 		add_filter( 'woocommerce_payment_gateways', array( __CLASS__, 'register_gateway' ) );
+		add_action( 'woocommerce_create_refund', array( 'Fynex_WC_Gateway', 'remember_created_refund' ), 10, 2 );
 		// woocommerce_blocks_loaded has already fired by plugins_loaded:20, so hook the
 		// registry itself; it initialises on init:5.
 		add_action( 'woocommerce_blocks_payment_method_type_registration', array( __CLASS__, 'register_blocks' ) );

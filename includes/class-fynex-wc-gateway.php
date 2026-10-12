@@ -3,6 +3,9 @@
 defined( 'ABSPATH' ) || exit;
 
 final class Fynex_WC_Gateway extends WC_Payment_Gateway {
+	/** @var array<int,WC_Order_Refund> */
+	private static array $creating_refunds = array();
+
 	private string $api_token;
 	private string $webhook_secret;
 
@@ -211,7 +214,47 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 			}
 			return new WP_Error( 'fynex_refund_pending', __( 'Another Fynex refund is pending confirmation for this order.', 'fynex-for-woocommerce' ) );
 		}
-		$submission = $this->refund_submission( $order, $amount, (string) $reason );
+		// The webhook and the reconciler update the same order meta.
+		$lock  = Fynex_WC_Payment_Outcome::lock_name( (int) $order->get_id() );
+		$lease = Fynex_WC_Lock::acquire_waiting( $lock, 60, 10 );
+		if ( null === $lease ) {
+			return new WP_Error( 'fynex_refund_busy', __( 'This order is being updated by a Fynex notification. Try the refund again in a moment.', 'fynex-for-woocommerce' ) );
+		}
+		try {
+			return $this->submit_refund( (int) $order->get_id(), $payment_id, $amount, (string) $reason );
+		} finally {
+			Fynex_WC_Lock::release( $lock, $lease );
+		}
+	}
+
+	/**
+	 * Remembers the refund record WooCommerce is creating, so process_refund() can link it to the Fynex refund.
+	 *
+	 * @param WC_Order_Refund      $refund
+	 * @param array<string,mixed> $args
+	 */
+	public static function remember_created_refund( $refund, $args ): void {
+		if ( $refund instanceof WC_Order_Refund && is_array( $args ) ) {
+			self::$creating_refunds[ (int) ( $args['order_id'] ?? 0 ) ] = $refund;
+		}
+	}
+
+	/**
+	 * Sends the refund and, once Fynex accepts it, lets WooCommerce keep its refund record.
+	 *
+	 * The record is tagged with the Fynex refund ID; reconciliation then only confirms it.
+	 * A refund Fynex later reports as failed is flagged on the order for the merchant to
+	 * delete, rather than deleted automatically, because deleting it cannot undo a
+	 * restock or a status change WooCommerce already made.
+	 *
+	 * @return bool|WP_Error
+	 */
+	private function submit_refund( int $order_id, string $payment_id, float $amount, string $reason ) {
+		$order        = wc_get_order( $order_id );
+		$local_refund = self::$creating_refunds[ $order_id ] ?? null;
+		unset( self::$creating_refunds[ $order_id ] );
+
+		$submission = $this->refund_submission( $order, $amount, $reason );
 		$response   = ( new Fynex_WC_API_Client( $this->api_token ) )->refund( $payment_id, $amount, $submission['idempotency_key'] );
 		if ( is_wp_error( $response ) ) {
 			$error_data = $response->get_error_data();
@@ -226,31 +269,55 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 			return new WP_Error( 'fynex_invalid_refund_response', __( 'Fynex returned an invalid refund response.', 'fynex-for-woocommerce' ) );
 		}
 
-		if ( in_array( sanitize_key( (string) ( $response['status'] ?? '' ) ), array( 'failed', 'cancelled' ), true ) ) {
+		$fynex_status = sanitize_key( (string) ( $response['status'] ?? '' ) );
+		if ( in_array( $fynex_status, array( 'failed', 'cancelled' ), true ) ) {
 			$order->delete_meta_data( '_fynex_refund_submission' );
 			$order->save();
 			return new WP_Error( 'fynex_refund_rejected', __( 'Fynex rejected this refund.', 'fynex-for-woocommerce' ) );
 		}
 
-		$order->delete_meta_data( '_fynex_refund_submission' );
-		$refunds   = $this->refunds( $order );
-		$refunds[] = array(
-			'id'           => sanitize_text_field( $response['id'] ),
+		$refund_id = sanitize_text_field( $response['id'] );
+		$entry     = array(
+			'id'           => $refund_id,
 			'amount'       => $amount,
-			'status'       => 'pending',
+			'status'       => 'succeeded' === $fynex_status ? 'succeeded' : 'pending',
 			'createdAt'    => time(),
-			'reason'       => sanitize_text_field( (string) $reason ),
+			'reason'       => sanitize_text_field( $reason ),
 			'payment_id'   => $payment_id,
 			'amount_minor' => (int) round( $amount * 100 ),
 			'currency'     => strtoupper( $order->get_currency() ),
 		);
-		$order->update_meta_data( '_fynex_refunds', $refunds );
-		/* translators: 1: Fynex refund ID, 2: refund amount */
-		$order->add_order_note( sprintf( __( 'Fynex refund %1$s submitted for %2$s.', 'fynex-for-woocommerce' ), $response['id'], wc_price( $amount, array( 'currency' => $order->get_currency() ) ) ) );
-		$order->save();
+		if ( $local_refund instanceof WC_Order_Refund && $local_refund->get_id() > 0 ) {
+			$local_refund->update_meta_data( '_fynex_refund_id', $refund_id );
+			$local_refund->save();
+			$entry['local_refund_id'] = (int) $local_refund->get_id();
+		}
 
-		Fynex_WC_Refund_Reconciliation::schedule( (int) $order->get_id(), (string) $response['id'] );
-		return new WP_Error( 'fynex_refund_pending', __( 'Fynex accepted the refund. WooCommerce will record it after it is reconciled with Fynex.', 'fynex-for-woocommerce' ) );
+		$order->delete_meta_data( '_fynex_refund_submission' );
+		$refunds   = $this->refunds( $order );
+		$refunds[] = $entry;
+		$order->update_meta_data( '_fynex_refunds', $refunds );
+		$order->add_order_note(
+			'succeeded' === $entry['status']
+				/* translators: 1: Fynex refund ID, 2: refund amount */
+				? sprintf( __( 'Fynex refunded %2$s (refund %1$s).', 'fynex-for-woocommerce' ), $refund_id, wc_price( $amount, array( 'currency' => $order->get_currency() ) ) )
+				/* translators: 1: Fynex refund ID, 2: refund amount */
+				: sprintf( __( 'Fynex accepted a refund of %2$s (refund %1$s). Fynex usually confirms it within minutes; this order gets a note if it fails.', 'fynex-for-woocommerce' ), $refund_id, wc_price( $amount, array( 'currency' => $order->get_currency() ) ) )
+		);
+		$order->save();
+		Fynex_WC_Logger::info(
+			'Fynex refund submitted.',
+			array(
+				'order_id'  => $order_id,
+				'refund_id' => $refund_id,
+				'status'    => $entry['status'],
+			)
+		);
+
+		if ( 'pending' === $entry['status'] || ! isset( $entry['local_refund_id'] ) ) {
+			Fynex_WC_Refund_Reconciliation::schedule( $order_id, $refund_id );
+		}
+		return true;
 	}
 
 	private function refund_submission( WC_Order $order, float $amount, string $reason ): array {

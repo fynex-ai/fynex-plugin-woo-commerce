@@ -20,11 +20,28 @@ final class Fynex_WC_Refund_Reconciliation {
 		wp_schedule_single_event( time() + 60, self::ACTION, array( $order_id, $refund_id ) );
 	}
 
-	public static function reconcile( int $order_id, string $refund_id ): void {
-		$order = wc_get_order( $order_id );
-		if ( ! $order instanceof WC_Order ) {
+	/**
+	 * @param int|string $order_id
+	 */
+	public static function reconcile( $order_id, string $refund_id ): void {
+		$order_id = (int) $order_id;
+		$lock     = Fynex_WC_Payment_Outcome::lock_name( $order_id );
+		$lease    = Fynex_WC_Lock::acquire( $lock, self::LOCK_LEASE_SECONDS );
+		if ( null === $lease ) {
+			self::schedule( $order_id, $refund_id );
 			return;
 		}
+		try {
+			$order = wc_get_order( $order_id );
+			if ( $order instanceof WC_Order ) {
+				self::reconcile_order( $order, $refund_id );
+			}
+		} finally {
+			Fynex_WC_Lock::release( $lock, $lease );
+		}
+	}
+
+	private static function reconcile_order( WC_Order $order, string $refund_id ): void {
 		$token = (string) get_option( 'fynex_woo_api_token', '' );
 		if ( '' === $token ) {
 			$settings = get_option( 'woocommerce_fynex_settings', array() );
@@ -41,6 +58,13 @@ final class Fynex_WC_Refund_Reconciliation {
 		}
 		$status = sanitize_key( (string) ( $response['status'] ?? '' ) );
 		if ( ! self::matches_refund( $order, $refund_id, $response ) ) {
+			Fynex_WC_Logger::warning(
+				'Fynex refund data did not match the submitted refund.',
+				array(
+					'order_id'  => $order->get_id(),
+					'refund_id' => $refund_id,
+				)
+			);
 			$order->update_meta_data( '_fynex_refund_attention', 'yes' );
 			$order->add_order_note( __( 'Fynex refund data did not match the submitted refund. Review before recording it in WooCommerce.', 'fynex-for-woocommerce' ) );
 			$order->save();
@@ -129,11 +153,11 @@ final class Fynex_WC_Refund_Reconciliation {
 			try {
 				$local_refund = wc_create_refund(
 					array(
-						'amount'                 => (float) ( $refund['amount'] ?? 0 ),
-						'reason'                 => (string) ( $refund['reason'] ?? '' ),
-						'order_id'               => $order->get_id(),
-						'refund_payment'         => false,
-						'restock_refunded_items' => false,
+						'amount'         => (float) ( $refund['amount'] ?? 0 ),
+						'reason'         => (string) ( $refund['reason'] ?? '' ),
+						'order_id'       => $order->get_id(),
+						'refund_payment' => false,
+						'restock_items'  => false,
 					)
 				);
 			} finally {
@@ -162,11 +186,35 @@ final class Fynex_WC_Refund_Reconciliation {
 	}
 
 	private static function mark_failed( WC_Order $order, string $refund_id ): void {
-		if ( self::update_refund_status( $order, $refund_id, 'failed' ) ) {
-			$order->update_meta_data( '_fynex_refund_attention', 'yes' );
-			/* translators: %s: Fynex refund ID */
-			$order->add_order_note( sprintf( __( 'Fynex refund %s failed. Review this refund before issuing another one.', 'fynex-for-woocommerce' ), $refund_id ) );
+		if ( ! self::update_refund_status( $order, $refund_id, 'failed' ) ) {
+			return;
 		}
+		$order->update_meta_data( '_fynex_refund_attention', 'yes' );
+		$local_refund_id = self::local_refund_id( $order, $refund_id );
+		Fynex_WC_Logger::warning(
+			'Fynex reported a refund as failed.',
+			array(
+				'order_id'        => $order->get_id(),
+				'refund_id'       => $refund_id,
+				'local_refund_id' => $local_refund_id,
+			)
+		);
+		if ( $local_refund_id > 0 ) {
+			/* translators: 1: Fynex refund ID, 2: WooCommerce refund ID */
+			$order->add_order_note( sprintf( __( 'Fynex refund %1$s failed, so no money was returned. Delete WooCommerce refund #%2$d from this order, then refund again.', 'fynex-for-woocommerce' ), $refund_id, $local_refund_id ) );
+			return;
+		}
+		/* translators: %s: Fynex refund ID */
+		$order->add_order_note( sprintf( __( 'Fynex refund %s failed. Review this refund before issuing another one.', 'fynex-for-woocommerce' ), $refund_id ) );
+	}
+
+	private static function local_refund_id( WC_Order $order, string $refund_id ): int {
+		foreach ( self::refunds( $order ) as $refund ) {
+			if ( is_array( $refund ) && ( $refund['id'] ?? '' ) === $refund_id ) {
+				return (int) ( $refund['local_refund_id'] ?? 0 );
+			}
+		}
+		return 0;
 	}
 
 	private static function reschedule_if_current( WC_Order $order, string $refund_id ): void {
@@ -179,6 +227,13 @@ final class Fynex_WC_Refund_Reconciliation {
 				return;
 			}
 			$order->update_meta_data( '_fynex_refund_attention', 'yes' );
+			Fynex_WC_Logger::warning(
+				'Fynex refund still pending after 20 minutes.',
+				array(
+					'order_id'  => $order->get_id(),
+					'refund_id' => $refund_id,
+				)
+			);
 			/* translators: %s: Fynex refund ID */
 			$order->add_order_note( sprintf( __( 'Fynex refund %s is still pending after 20 minutes. Contact Fynex support before retrying.', 'fynex-for-woocommerce' ), $refund_id ) );
 			$order->save();

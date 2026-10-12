@@ -125,6 +125,13 @@ final class Fynex_WC_Webhook {
 			if ( Fynex_WC_Refund_Reconciliation::matches_webhook( $order, (string) $payload['refundId'], $payload ) ) {
 				Fynex_WC_Refund_Reconciliation::mark_succeeded( $order, (string) $payload['refundId'] );
 			} else {
+				Fynex_WC_Logger::warning(
+					'Fynex refund webhook did not match a refund submitted from this store.',
+					array(
+						'order_id'  => $order->get_id(),
+						'refund_id' => (string) $payload['refundId'],
+					)
+				);
 				$order->update_meta_data( '_fynex_refund_attention', 'yes' );
 				$order->add_order_note( __( 'Fynex refund webhook did not match a submitted refund. Review before recording it in WooCommerce.', 'fynex-for-woocommerce' ) );
 			}
