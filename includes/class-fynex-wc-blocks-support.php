@@ -20,19 +20,19 @@ final class Fynex_WC_Blocks_Support extends AbstractPaymentMethodType {
 
 	public function get_payment_method_script_handles(): array {
 		wp_register_script(
-			'fynex-wc-blocks',
+			'fynex-for-woocommerce-blocks',
 			FYNEX_WC_URL . 'assets/js/blocks.js',
 			array( 'wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-html-entities' ),
 			FYNEX_WC_VERSION,
 			true
 		);
-		return array( 'fynex-wc-blocks' );
+		return array( 'fynex-for-woocommerce-blocks' );
 	}
 
 	public function get_payment_method_data(): array {
 		return array(
-			'title'       => $this->settings['title'] ?? __( 'Fynex', 'fynex-woo-commerce' ),
-			'description' => $this->settings['description'] ?? __( 'Pay securely on Fynex hosted checkout.', 'fynex-woo-commerce' ),
+			'title'       => $this->settings['title'] ?? __( 'Fynex', 'fynex-for-woocommerce' ),
+			'description' => $this->settings['description'] ?? __( 'Pay securely on Fynex hosted checkout.', 'fynex-for-woocommerce' ),
 			'supports'    => $this->supported_features(),
 		);
 	}

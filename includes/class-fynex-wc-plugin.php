@@ -41,6 +41,6 @@ final class Fynex_WC_Plugin {
 		if ( ! current_user_can( 'activate_plugins' ) ) {
 			return;
 		}
-		echo '<div class="notice notice-error"><p>' . esc_html__( 'Fynex for WooCommerce requires WooCommerce to be installed and active.', 'fynex-woo-commerce' ) . '</p></div>';
+		echo '<div class="notice notice-error"><p>' . esc_html__( 'Fynex for WooCommerce requires WooCommerce to be installed and active.', 'fynex-for-woocommerce' ) . '</p></div>';
 	}
 }

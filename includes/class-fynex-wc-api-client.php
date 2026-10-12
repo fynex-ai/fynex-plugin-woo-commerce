@@ -78,7 +78,7 @@ final class Fynex_WC_API_Client {
 	 */
 	private function request( string $method, string $path, ?array $body = null, string $idempotency_key = '' ) {
 		if ( '' === $this->token ) {
-			return new WP_Error( 'fynex_missing_token', __( 'Fynex API token is not configured.', 'fynex-woo-commerce' ) );
+			return new WP_Error( 'fynex_missing_token', __( 'Fynex API token is not configured.', 'fynex-for-woocommerce' ) );
 		}
 
 		$headers = array(
@@ -104,7 +104,7 @@ final class Fynex_WC_API_Client {
 			)
 		);
 		if ( is_wp_error( $response ) ) {
-			return new WP_Error( 'fynex_network_error', __( 'Fynex could not be reached. Please try again.', 'fynex-woo-commerce' ) );
+			return new WP_Error( 'fynex_network_error', __( 'Fynex could not be reached. Please try again.', 'fynex-for-woocommerce' ) );
 		}
 
 		$status  = (int) wp_remote_retrieve_response_code( $response );
@@ -115,7 +115,7 @@ final class Fynex_WC_API_Client {
 		if ( $status < 200 || $status >= 300 ) {
 			$message = isset( $decoded['error'] ) && is_string( $decoded['error'] )
 				? $decoded['error']
-				: __( 'Fynex rejected the request.', 'fynex-woo-commerce' );
+				: __( 'Fynex rejected the request.', 'fynex-for-woocommerce' );
 			return new WP_Error( 'fynex_api_error', $message, array( 'status' => $status ) );
 		}
 

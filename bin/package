@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-out="$root/dist/fynex-woo-commerce.zip"
+out="$root/dist/fynex-for-woocommerce.zip"
 mkdir -p "$root/dist"
 ROOT="$root" OUT="$out" python3 - <<'PY'
 import os
@@ -10,15 +10,15 @@ from pathlib import Path
 
 root = Path(os.environ['ROOT'])
 out = Path(os.environ['OUT'])
-include = ('fynex-woo-commerce.php', 'includes/', 'assets/', 'README.md', 'LICENSE')
+include = ('fynex-for-woocommerce.php', 'includes/', 'assets/', 'README.md', 'LICENSE')
 with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as archive:
     for entry in include:
         path = root / entry
         if path.is_file():
-            archive.write(path, Path('fynex-woo-commerce') / path.name)
+            archive.write(path, Path('fynex-for-woocommerce') / path.name)
         elif path.is_dir():
             for file in path.rglob('*'):
                 if file.is_file():
-                    archive.write(file, Path('fynex-woo-commerce') / file.relative_to(root))
+                    archive.write(file, Path('fynex-for-woocommerce') / file.relative_to(root))
 print(out)
 PY

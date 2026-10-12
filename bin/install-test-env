@@ -27,7 +27,7 @@ mkdir -p "$core_dir"
 curl -fsSL "$core_url" | tar -xz --strip-components=1 -C "$core_dir"
 curl -fsSL -o "$tmp/woocommerce.zip" "$wc_url"
 unzip -q "$tmp/woocommerce.zip" -d "$core_dir/wp-content/plugins"
-ln -s "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" "$core_dir/wp-content/plugins/fynex-plugin"
+ln -s "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" "$core_dir/wp-content/plugins/fynex-for-woocommerce"
 rm -rf "$tmp"
 
 mysql --host="$db_host" --user="$db_user" --password="$db_pass" -e "DROP DATABASE IF EXISTS \`$db_name\`; CREATE DATABASE \`$db_name\`;"

@@ -4,7 +4,7 @@ defined( 'ABSPATH' ) || exit;
 
 final class Fynex_WC_Refund_Reconciliation {
 	private const ACTION = 'fynex_woo_reconcile_refund';
-	private const GROUP  = 'fynex-woo-commerce';
+	private const GROUP  = 'fynex-for-woocommerce';
 	private const MAX_AGE_SECONDS = 1200;
 	private const LOCK_LEASE_SECONDS = 300;
 
@@ -42,7 +42,7 @@ final class Fynex_WC_Refund_Reconciliation {
 		$status = sanitize_key( (string) ( $response['status'] ?? '' ) );
 		if ( ! self::matches_refund( $order, $refund_id, $response ) ) {
 			$order->update_meta_data( '_fynex_refund_attention', 'yes' );
-			$order->add_order_note( __( 'Fynex refund data did not match the submitted refund. Review before recording it in WooCommerce.', 'fynex-woo-commerce' ) );
+			$order->add_order_note( __( 'Fynex refund data did not match the submitted refund. Review before recording it in WooCommerce.', 'fynex-for-woocommerce' ) );
 			$order->save();
 			return;
 		}
@@ -100,7 +100,7 @@ final class Fynex_WC_Refund_Reconciliation {
 			$changed = self::update_refund_status( $order, $refund_id, 'succeeded' );
 			self::ensure_local_refund( $order, $refund_id );
 			if ( $changed ) {
-				$order->add_order_note( sprintf( __( 'Fynex confirmed refund %s.', 'fynex-woo-commerce' ), $refund_id ) );
+				$order->add_order_note( sprintf( __( 'Fynex confirmed refund %s.', 'fynex-for-woocommerce' ), $refund_id ) );
 			}
 			$order->save();
 		} finally {
@@ -140,7 +140,7 @@ final class Fynex_WC_Refund_Reconciliation {
 			}
 			if ( is_wp_error( $local_refund ) ) {
 				$order->update_meta_data( '_fynex_refund_attention', 'yes' );
-				$order->add_order_note( __( 'Fynex confirmed a refund, but WooCommerce could not create its local refund record. Retrying automatically.', 'fynex-woo-commerce' ) );
+				$order->add_order_note( __( 'Fynex confirmed a refund, but WooCommerce could not create its local refund record. Retrying automatically.', 'fynex-for-woocommerce' ) );
 				self::schedule( (int) $order->get_id(), $refund_id );
 				return;
 			}
@@ -163,7 +163,7 @@ final class Fynex_WC_Refund_Reconciliation {
 	private static function mark_failed( WC_Order $order, string $refund_id ): void {
 		if ( self::update_refund_status( $order, $refund_id, 'failed' ) ) {
 			$order->update_meta_data( '_fynex_refund_attention', 'yes' );
-			$order->add_order_note( sprintf( __( 'Fynex refund %s failed. Review this refund before issuing another one.', 'fynex-woo-commerce' ), $refund_id ) );
+			$order->add_order_note( sprintf( __( 'Fynex refund %s failed. Review this refund before issuing another one.', 'fynex-for-woocommerce' ), $refund_id ) );
 		}
 	}
 
@@ -177,7 +177,7 @@ final class Fynex_WC_Refund_Reconciliation {
 				return;
 			}
 			$order->update_meta_data( '_fynex_refund_attention', 'yes' );
-			$order->add_order_note( sprintf( __( 'Fynex refund %s is still pending after 20 minutes. Contact Fynex support before retrying.', 'fynex-woo-commerce' ), $refund_id ) );
+			$order->add_order_note( sprintf( __( 'Fynex refund %s is still pending after 20 minutes. Contact Fynex support before retrying.', 'fynex-for-woocommerce' ), $refund_id ) );
 			$order->save();
 			return;
 		}

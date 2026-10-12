@@ -13,7 +13,7 @@ defined( 'ABSPATH' ) || exit;
  */
 final class Fynex_WC_Payment_Check {
 	private const ACTION          = 'fynex_woo_check_payment';
-	private const GROUP           = 'fynex-woo-commerce';
+	private const GROUP           = 'fynex-for-woocommerce';
 	private const INTERVAL        = 300;
 	private const MAX_AGE_SECONDS = 3600;
 	private const LOCK_LEASE      = 60;

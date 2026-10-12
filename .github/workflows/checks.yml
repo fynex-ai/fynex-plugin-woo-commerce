@@ -16,6 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Oldest supported: the declared Requires PHP / Requires at least / WC requires at least.
+          - { php: '7.4', wp: '6.9', wc: '10.9.4', storage: 'posts' }
+          - { php: '7.4', wp: '6.9', wc: '10.9.4', storage: 'hpos' }
           - { php: '8.3', wp: 'latest', wc: 'latest', storage: 'posts' }
           - { php: '8.3', wp: 'latest', wc: 'latest', storage: 'hpos' }
     env:
@@ -56,6 +59,6 @@ jobs:
         run: ./bin/package
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: fynex-woo-commerce
-          path: dist/fynex-woo-commerce.zip
+          name: fynex-for-woocommerce
+          path: dist/fynex-for-woocommerce.zip
           if-no-files-found: error

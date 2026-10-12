@@ -12,13 +12,13 @@ Official Fynex hosted-checkout payment gateway for WooCommerce.
 ## Requirements
 
 - WordPress 6.9+
-- PHP 8.1+
-- WooCommerce 10.9+ (tested through 11.0)
+- PHP 7.4+
+- WooCommerce 10.9+ (tested through 11.2)
 - A Fynex seller API token and an HTTPS-accessible store URL.
 
 ## Install
 
-1. Download `fynex-woo-commerce.zip` from the release.
+1. Download `fynex-for-woocommerce.zip` from the release.
 2. In WordPress, open **Plugins → Add New → Upload Plugin**, choose the zip, install, and activate it.
 3. Open **WooCommerce → Settings → Payments → Fynex → Manage**.
 4. Paste the Fynex seller API token and save. The plugin registers
@@ -59,5 +59,5 @@ payments, custom update service, or WordPress.org distribution.
 ```
 
 `bin/test-docker` runs PHP syntax checks and webhook-verifier tests inside the
-PHP 8.3 Docker image. `bin/package` emits `dist/fynex-woo-commerce.zip` with
+PHP 8.3 Docker image. `bin/package` emits `dist/fynex-for-woocommerce.zip` with
 only runtime files.

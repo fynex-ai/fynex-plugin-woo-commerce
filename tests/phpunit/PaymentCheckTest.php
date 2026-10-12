@@ -50,7 +50,7 @@ final class PaymentCheckTest extends Fynex_Test_Case {
 		Fynex_WC_Payment_Check::run_scheduled( $order->get_id(), $payment_id );
 
 		$this->assertFalse( wc_get_order( $order->get_id() )->is_paid() );
-		$this->assertTrue( as_has_scheduled_action( 'fynex_woo_check_payment', array( $order->get_id(), $payment_id ), 'fynex-woo-commerce' ) );
+		$this->assertTrue( as_has_scheduled_action( 'fynex_woo_check_payment', array( $order->get_id(), $payment_id ), 'fynex-for-woocommerce' ) );
 	}
 
 	public function test_already_paid_order_is_not_polled(): void {

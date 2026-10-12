@@ -1,18 +1,19 @@
 <?php
 /**
  * Plugin Name: Fynex for WooCommerce
- * Plugin URI: https://fynex.ai
+ * Plugin URI: https://fynex.ai/integrations/woocommerce
  * Description: Accept payments through Fynex hosted checkout without card data touching your WooCommerce store.
  * Version: 0.1.0
  * Requires at least: 6.9
- * Requires PHP: 8.1
+ * Requires PHP: 7.4
  * Requires Plugins: woocommerce
  * Author: Fynex
+ * Author URI: https://fynex.ai
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: fynex-woo-commerce
+ * Text Domain: fynex-for-woocommerce
  * WC requires at least: 10.9
- * WC tested up to: 11.0
+ * WC tested up to: 11.2
  */
 
 defined( 'ABSPATH' ) || exit;

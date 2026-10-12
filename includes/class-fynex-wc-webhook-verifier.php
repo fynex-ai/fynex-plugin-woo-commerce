@@ -19,7 +19,7 @@ final class Fynex_WC_Webhook_Verifier {
 			return false;
 		}
 
-		if ( ! str_starts_with( $signature_header, 'sha256=' ) ) {
+		if ( 0 !== strncmp( $signature_header, 'sha256=', 7 ) ) {
 			return false;
 		}
 

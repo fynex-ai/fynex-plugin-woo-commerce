@@ -28,9 +28,9 @@ tests_add_filter(
 		// Load the plugin through the link bin/install-test-env creates in the
 		// plugins directory: WooCommerce only records feature compatibility for
 		// files WordPress recognises as plugins.
-		$main_file = WP_CONTENT_DIR . '/plugins/fynex-plugin/fynex-woo-commerce.php';
+		$main_file = WP_CONTENT_DIR . '/plugins/fynex-for-woocommerce/fynex-for-woocommerce.php';
 		wp_register_plugin_realpath( $main_file );
-		update_option( 'active_plugins', array( 'woocommerce/woocommerce.php', 'fynex-plugin/fynex-woo-commerce.php' ) );
+		update_option( 'active_plugins', array( 'woocommerce/woocommerce.php', 'fynex-for-woocommerce/fynex-for-woocommerce.php' ) );
 		require $main_file;
 	}
 );

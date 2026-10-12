@@ -44,7 +44,7 @@ final class CheckoutTest extends Fynex_Test_Case {
 		$order      = $this->create_order();
 		$payment_id = $this->start_checkout( $order );
 
-		$this->assertTrue( as_has_scheduled_action( 'fynex_woo_check_payment', array( $order->get_id(), $payment_id ), 'fynex-woo-commerce' ) );
+		$this->assertTrue( as_has_scheduled_action( 'fynex_woo_check_payment', array( $order->get_id(), $payment_id ), 'fynex-for-woocommerce' ) );
 	}
 
 	public function test_retry_within_the_session_reuses_the_attempt(): void {

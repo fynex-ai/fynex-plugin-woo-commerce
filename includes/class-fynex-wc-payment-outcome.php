@@ -59,7 +59,7 @@ final class Fynex_WC_Payment_Outcome {
 			return;
 		}
 		$order->update_meta_data( '_fynex_attempt_terminal', $outcome );
-		$order->update_status( 'failed', __( 'Fynex reported that the payment did not complete.', 'fynex-woo-commerce' ) );
+		$order->update_status( 'failed', __( 'Fynex reported that the payment did not complete.', 'fynex-for-woocommerce' ) );
 	}
 
 	/**
@@ -74,7 +74,7 @@ final class Fynex_WC_Payment_Outcome {
 		if ( ! self::matches_attempt( $order, $payment_id, $amount_minor, $currency ) ) {
 			if ( 'yes' !== $order->get_meta( '_fynex_payment_attention', true ) ) {
 				$order->update_meta_data( '_fynex_payment_attention', 'yes' );
-				$order->add_order_note( __( 'Fynex payment completion did not match the expected attempt amount or currency. Review before fulfilling.', 'fynex-woo-commerce' ) );
+				$order->add_order_note( __( 'Fynex payment completion did not match the expected attempt amount or currency. Review before fulfilling.', 'fynex-for-woocommerce' ) );
 			}
 			return;
 		}
@@ -82,14 +82,14 @@ final class Fynex_WC_Payment_Outcome {
 		if ( $order->is_paid() ) {
 			if ( $payment_id !== (string) $order->get_meta( '_fynex_paid_payment_id', true ) ) {
 				$order->update_meta_data( '_fynex_payment_attention', 'yes' );
-				$order->add_order_note( __( 'A second Fynex payment attempt completed after this order was already paid. Review for a duplicate charge.', 'fynex-woo-commerce' ) );
+				$order->add_order_note( __( 'A second Fynex payment attempt completed after this order was already paid. Review for a duplicate charge.', 'fynex-for-woocommerce' ) );
 			}
 			return;
 		}
 		$order->update_meta_data( '_fynex_paid_payment_id', $payment_id );
 		$order->delete_meta_data( '_fynex_attempt_terminal' );
 		$order->payment_complete( $payment_id );
-		$order->add_order_note( __( 'Fynex confirmed the payment.', 'fynex-woo-commerce' ) );
+		$order->add_order_note( __( 'Fynex confirmed the payment.', 'fynex-for-woocommerce' ) );
 	}
 
 	private static function matches_attempt( WC_Order $order, string $payment_id, ?int $amount_minor, string $currency ): bool {
