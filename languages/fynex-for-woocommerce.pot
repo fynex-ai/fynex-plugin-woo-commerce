@@ -9,13 +9,14 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-08T20:35:37+00:00\n"
+"POT-Creation-Date: 2026-10-08T20:47:32+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: fynex-for-woocommerce\n"
 
 #. Plugin Name of the plugin
 #: fynex-for-woocommerce.php
+#: includes/class-fynex-wc-plugin.php:46
 msgid "Fynex for WooCommerce"
 msgstr ""
 
@@ -32,9 +33,9 @@ msgstr ""
 #. Author of the plugin
 #: fynex-for-woocommerce.php
 #: includes/class-fynex-wc-blocks-support.php:35
-#: includes/class-fynex-wc-gateway.php:11
-#: includes/class-fynex-wc-gateway.php:18
-#: includes/class-fynex-wc-gateway.php:38
+#: includes/class-fynex-wc-gateway.php:14
+#: includes/class-fynex-wc-gateway.php:21
+#: includes/class-fynex-wc-gateway.php:41
 #: assets/js/blocks.js:9
 msgid "Fynex"
 msgstr ""
@@ -44,154 +45,192 @@ msgstr ""
 msgid "https://fynex.ai"
 msgstr ""
 
-#: includes/class-fynex-wc-api-client.php:81
+#: includes/class-fynex-wc-api-client.php:100
 msgid "Fynex API token is not configured."
 msgstr ""
 
-#: includes/class-fynex-wc-api-client.php:107
+#: includes/class-fynex-wc-api-client.php:133
 msgid "Fynex could not be reached. Please try again."
 msgstr ""
 
-#: includes/class-fynex-wc-api-client.php:118
+#: includes/class-fynex-wc-api-client.php:144
 msgid "Fynex rejected the request."
 msgstr ""
 
 #: includes/class-fynex-wc-blocks-support.php:36
-#: includes/class-fynex-wc-gateway.php:19
-#: includes/class-fynex-wc-gateway.php:45
+#: includes/class-fynex-wc-gateway.php:24
+#: includes/class-fynex-wc-gateway.php:48
 #: assets/js/blocks.js:10
 msgid "Pay securely on Fynex hosted checkout."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:12
+#: includes/class-fynex-wc-gateway.php:15
 msgid "Redirect customers to Fynex hosted checkout. Card data never reaches this store."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:30
+#: includes/class-fynex-wc-gateway.php:33
 msgid "Enable/Disable"
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:32
+#: includes/class-fynex-wc-gateway.php:35
 msgid "Enable Fynex payments"
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:36
+#: includes/class-fynex-wc-gateway.php:39
 msgid "Title"
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:40
+#: includes/class-fynex-wc-gateway.php:43
 msgid "Shown to customers at checkout."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:43
+#: includes/class-fynex-wc-gateway.php:46
 msgid "Description"
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:46
+#: includes/class-fynex-wc-gateway.php:49
 msgid "Card details are entered on Fynex, not on this store."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:49
+#: includes/class-fynex-wc-gateway.php:52
 msgid "Fynex API token"
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:51
-msgid "Seller token from Fynex. This plugin always uses api.fynex.ai; there is no environment setting."
-msgstr ""
-
-#: includes/class-fynex-wc-gateway.php:54
+#: includes/class-fynex-wc-gateway.php:57
 msgid "Webhook signing secret"
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:56
+#: includes/class-fynex-wc-gateway.php:59
 msgid "Saved automatically when this plugin registers its callback. If the callback already exists, paste its signing secret here."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:93
+#: includes/class-fynex-wc-gateway.php:62
+msgid "Debug log"
+msgstr ""
+
+#: includes/class-fynex-wc-gateway.php:64
+msgid "Log Fynex requests and webhooks"
+msgstr ""
+
+#: includes/class-fynex-wc-gateway.php:66
+msgid "Logs go to WooCommerce → Status → Logs, source fynex-for-woocommerce. Errors are logged even when this is off. Logs never contain the API token, the signing secret or card data."
+msgstr ""
+
+#: includes/class-fynex-wc-gateway.php:75
+msgid "Seller API key from the Fynex dashboard. A test key (sk_test_…) takes demo payments, a live key (sk_live_…) takes real ones."
+msgstr ""
+
+#: includes/class-fynex-wc-gateway.php:80
+msgid "Saved key: demo. No real money moves."
+msgstr ""
+
+#: includes/class-fynex-wc-gateway.php:81
+msgid "Saved key: live. Customers are charged."
+msgstr ""
+
+#: includes/class-fynex-wc-gateway.php:82
+msgid "Saved key: older token format; its mode is set by the seller account in Fynex."
+msgstr ""
+
+#: includes/class-fynex-wc-gateway.php:94
+msgid "Test mode: no real payment is taken."
+msgstr ""
+
+#: includes/class-fynex-wc-gateway.php:131
 msgid "Fynex is not fully configured. Please contact the store administrator."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:99
+#: includes/class-fynex-wc-gateway.php:137
 msgid "Fynex supports amounts with up to two decimal places."
 msgstr ""
 
 #. translators: %s: order number
-#: includes/class-fynex-wc-gateway.php:117
+#: includes/class-fynex-wc-gateway.php:155
 #, php-format
 msgid "Order #%s"
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:123
+#: includes/class-fynex-wc-gateway.php:161
 msgid "Fynex checkout session could not be created."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:124
+#: includes/class-fynex-wc-gateway.php:162
 msgid "Unable to start Fynex checkout. Please try again."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:134
+#: includes/class-fynex-wc-gateway.php:175
+msgid "Awaiting Fynex payment (demo key, no real money)."
+msgstr ""
+
+#: includes/class-fynex-wc-gateway.php:176
 msgid "Awaiting Fynex payment."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:151
+#: includes/class-fynex-wc-gateway.php:194
 msgid "Fynex refund is unavailable."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:158
+#: includes/class-fynex-wc-gateway.php:201
 msgid "No Fynex payment is associated with this order."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:163
+#: includes/class-fynex-wc-gateway.php:206
 msgid "Refund amount must be greater than zero."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:170
+#: includes/class-fynex-wc-gateway.php:213
 msgid "This Fynex refund is already pending confirmation."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:172
+#: includes/class-fynex-wc-gateway.php:215
 msgid "Another Fynex refund is pending confirmation for this order."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:186
+#: includes/class-fynex-wc-gateway.php:221
+msgid "This order is being updated by a Fynex notification. Try the refund again in a moment."
+msgstr ""
+
+#: includes/class-fynex-wc-gateway.php:269
 msgid "Fynex returned an invalid refund response."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:192
+#: includes/class-fynex-wc-gateway.php:276
 msgid "Fynex rejected this refund."
 msgstr ""
 
 #. translators: 1: Fynex refund ID, 2: refund amount
-#: includes/class-fynex-wc-gateway.php:209
+#: includes/class-fynex-wc-gateway.php:303
 #, php-format
-msgid "Fynex refund %1$s submitted for %2$s."
+msgid "Fynex refunded %2$s (refund %1$s)."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:213
-msgid "Fynex accepted the refund. WooCommerce will record it after it is reconciled with Fynex."
+#. translators: 1: Fynex refund ID, 2: refund amount
+#: includes/class-fynex-wc-gateway.php:305
+#, php-format
+msgid "Fynex accepted a refund of %2$s (refund %1$s). Fynex usually confirms it within minutes; this order gets a note if it fails."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:320
+#: includes/class-fynex-wc-gateway.php:427
 msgid "Fynex sends payment updates only to a public HTTPS address. Serve this store over HTTPS, then save the settings again."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:327
+#: includes/class-fynex-wc-gateway.php:434
 msgid "Fynex webhook could not be checked. Verify the API token and try saving again."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:342
+#: includes/class-fynex-wc-gateway.php:449
 msgid "The Fynex callback for this store exists but its signing secret is not stored here, and it could not be replaced. Paste the secret from the original registration, or delete the callback in Fynex and save again."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:350
+#: includes/class-fynex-wc-gateway.php:457
 msgid "Fynex webhook registration failed. The gateway remains disabled until a signing secret is configured."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:357
+#: includes/class-fynex-wc-gateway.php:464
 msgid "Fynex webhook replaced and its new signing secret saved."
 msgstr ""
 
-#: includes/class-fynex-wc-gateway.php:358
+#: includes/class-fynex-wc-gateway.php:465
 msgid "Fynex webhook registered and signing secret saved."
 msgstr ""
 
@@ -199,48 +238,64 @@ msgstr ""
 msgid "Fynex reported that the payment did not complete."
 msgstr ""
 
-#: includes/class-fynex-wc-payment-outcome.php:77
+#: includes/class-fynex-wc-payment-outcome.php:86
 msgid "Fynex payment completion did not match the expected attempt amount or currency. Review before fulfilling."
 msgstr ""
 
-#: includes/class-fynex-wc-payment-outcome.php:85
+#: includes/class-fynex-wc-payment-outcome.php:94
 msgid "A second Fynex payment attempt completed after this order was already paid. Review for a duplicate charge."
 msgstr ""
 
-#: includes/class-fynex-wc-payment-outcome.php:92
+#: includes/class-fynex-wc-payment-outcome.php:101
 msgid "Fynex confirmed the payment."
 msgstr ""
 
-#: includes/class-fynex-wc-plugin.php:52
+#: includes/class-fynex-wc-plugin.php:40
+msgid "We use Fynex to take card payments. When you pay with Fynex, we send Fynex the order amount, currency, country, an order reference and description, and the addresses on this store you return to. We do not send your name, email address, phone number or postal address. You enter your card details on a page hosted by Fynex; they are not sent to or stored on this website."
+msgstr ""
+
+#. translators: %s: link to the Fynex privacy policy
+#: includes/class-fynex-wc-plugin.php:43
+#, php-format
+msgid "Fynex processes your payment under its own privacy policy: %s"
+msgstr ""
+
+#: includes/class-fynex-wc-plugin.php:70
 msgid "Fynex for WooCommerce requires WooCommerce to be installed and active."
 msgstr ""
 
-#: includes/class-fynex-wc-refund-reconciliation.php:45
+#: includes/class-fynex-wc-refund-reconciliation.php:69
 msgid "Fynex refund data did not match the submitted refund. Review before recording it in WooCommerce."
 msgstr ""
 
 #. translators: %s: Fynex refund ID
-#: includes/class-fynex-wc-refund-reconciliation.php:104
+#: includes/class-fynex-wc-refund-reconciliation.php:128
 #, php-format
 msgid "Fynex confirmed refund %s."
 msgstr ""
 
-#: includes/class-fynex-wc-refund-reconciliation.php:144
+#: includes/class-fynex-wc-refund-reconciliation.php:168
 msgid "Fynex confirmed a refund, but WooCommerce could not create its local refund record. Retrying automatically."
 msgstr ""
 
+#. translators: 1: Fynex refund ID, 2: WooCommerce refund ID
+#: includes/class-fynex-wc-refund-reconciliation.php:204
+#, php-format
+msgid "Fynex refund %1$s failed, so no money was returned. Delete WooCommerce refund #%2$d from this order, then refund again."
+msgstr ""
+
 #. translators: %s: Fynex refund ID
-#: includes/class-fynex-wc-refund-reconciliation.php:168
+#: includes/class-fynex-wc-refund-reconciliation.php:208
 #, php-format
 msgid "Fynex refund %s failed. Review this refund before issuing another one."
 msgstr ""
 
 #. translators: %s: Fynex refund ID
-#: includes/class-fynex-wc-refund-reconciliation.php:183
+#: includes/class-fynex-wc-refund-reconciliation.php:238
 #, php-format
 msgid "Fynex refund %s is still pending after 20 minutes. Contact Fynex support before retrying."
 msgstr ""
 
-#: includes/class-fynex-wc-webhook.php:119
+#: includes/class-fynex-wc-webhook.php:136
 msgid "Fynex refund webhook did not match a submitted refund. Review before recording it in WooCommerce."
 msgstr ""

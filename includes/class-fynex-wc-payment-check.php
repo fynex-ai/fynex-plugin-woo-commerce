@@ -72,7 +72,7 @@ final class Fynex_WC_Payment_Check {
 		global $wp;
 		$order_id = absint( $wp->query_vars['order-received'] ?? 0 );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- the order key is the capability here, compared with hash_equals() below.
-		$order_key = isset( $_GET['key'] ) && is_string( $_GET['key'] ) ? wc_clean( wp_unslash( $_GET['key'] ) ) : '';
+		$order_key = isset( $_GET['key'] ) && is_string( $_GET['key'] ) ? sanitize_text_field( wp_unslash( $_GET['key'] ) ) : '';
 		if ( $order_id <= 0 || '' === $order_key ) {
 			return;
 		}

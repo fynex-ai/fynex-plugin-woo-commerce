@@ -10,7 +10,7 @@ from pathlib import Path
 
 root = Path(os.environ['ROOT'])
 out = Path(os.environ['OUT'])
-include = ('fynex-for-woocommerce.php', 'uninstall.php', 'includes/', 'assets/', 'languages/', 'README.md', 'LICENSE')
+include = ('fynex-for-woocommerce.php', 'uninstall.php', 'includes/', 'assets/', 'languages/', 'readme.txt', 'changelog.txt', 'README.md', 'LICENSE')
 with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as archive:
     for entry in include:
         path = root / entry

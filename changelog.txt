@@ -1,0 +1,4 @@
+*** Fynex for WooCommerce Changelog ***
+
+2026-08-09 - version 0.1.0
+* Initial preview: hosted checkout gateway, Classic and Checkout Block support, HPOS compatibility, signed webhooks, payment-attempt integrity checks, reconciled full and partial refunds.
