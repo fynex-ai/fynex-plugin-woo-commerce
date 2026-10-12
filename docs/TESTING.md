@@ -7,9 +7,10 @@ credentials are sent separately and are never stored in this repository.
 
 - A WooCommerce store served over **HTTPS** (Fynex delivers webhooks only to public
   HTTPS addresses).
-- A Fynex **test key** (`sk_test_…`) from the Fynex dashboard → Integration → API keys.
-  A test key takes demo payments; no real money moves.
-- Fynex test card numbers: <https://docs.fynex.ai/payments-api/v2/docs#tag/test-cards>.
+- A Fynex **test secret key** (`sk_test_…`): Fynex dashboard → Developers → API keys →
+  New secret key (shown once). A test key takes demo payments; no real money moves.
+  A publishable key (`pk_…`) is refused by the settings screen.
+- Fynex test card numbers: <https://docs.fynex.ai/payments-api/v1/docs/test-cards>.
 
 ## Set up
 

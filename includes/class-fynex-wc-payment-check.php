@@ -9,7 +9,7 @@ defined( 'ABSPATH' ) || exit;
  * seconds, so a store that is briefly unreachable would otherwise leave a
  * paid order pending forever. Two fallbacks read GET /payments/{ref}:
  * the order-received page when the customer returns, and a scheduled check
- * that repeats until the attempt reaches a result or MAX_AGE_SECONDS pass.
+ * that repeats until the attempt is captured or MAX_AGE_SECONDS pass.
  */
 final class Fynex_WC_Payment_Check {
 	private const ACTION          = 'fynex_woo_check_payment';
@@ -19,15 +19,31 @@ final class Fynex_WC_Payment_Check {
 	private const LOCK_LEASE      = 60;
 	private const RETURN_TIMEOUT  = 5;
 
+	/** Query argument on the failure return URL; see check_on_failure_return(). */
+	public const FAILURE_RETURN_ARG = 'fynex-cancelled';
+
 	public static function register(): void {
 		add_action( self::ACTION, array( __CLASS__, 'run_scheduled' ), 10, 2 );
 		add_action( 'template_redirect', array( __CLASS__, 'check_on_return' ), 5 );
+		add_action( 'template_redirect', array( __CLASS__, 'check_on_failure_return' ), 5 );
 	}
 
 	public static function schedule( int $order_id, string $payment_id ): void {
 		$args = array( $order_id, $payment_id );
 		if ( function_exists( 'as_schedule_single_action' ) ) {
-			if ( ! as_has_scheduled_action( self::ACTION, $args, self::GROUP ) ) {
+			// Only pending actions count as a duplicate: as_has_scheduled_action() also
+			// counts the running one, so a check rescheduling itself would find itself.
+			$pending = as_get_scheduled_actions(
+				array(
+					'hook'     => self::ACTION,
+					'args'     => $args,
+					'group'    => self::GROUP,
+					'status'   => ActionScheduler_Store::STATUS_PENDING,
+					'per_page' => 1,
+				),
+				'ids'
+			);
+			if ( array() === $pending ) {
 				as_schedule_single_action( time() + self::INTERVAL, self::ACTION, $args, self::GROUP );
 			}
 			return;
@@ -48,8 +64,8 @@ final class Fynex_WC_Payment_Check {
 			return;
 		}
 		try {
-			$order = wc_get_order( $order_id );
-			if ( ! $order instanceof WC_Order || ! self::needs_check( $order, $payment_id ) ) {
+			$order = Fynex_WC_Payment_Outcome::load_order( $order_id );
+			if ( null === $order || ! self::needs_check( $order, $payment_id ) ) {
 				return;
 			}
 			self::check( $order, $payment_id, null );
@@ -82,14 +98,52 @@ final class Fynex_WC_Payment_Check {
 			return;
 		}
 		try {
-			$order = wc_get_order( $order_id );
-			if ( ! $order instanceof WC_Order || 'fynex' !== $order->get_payment_method() || ! hash_equals( $order->get_order_key(), $order_key ) ) {
+			$order = Fynex_WC_Payment_Outcome::load_order( $order_id );
+			if ( null === $order || 'fynex' !== $order->get_payment_method() || ! hash_equals( $order->get_order_key(), $order_key ) ) {
 				return;
 			}
 			$payment_id = (string) $order->get_meta( '_fynex_current_payment_id', true );
 			if ( '' !== $payment_id && self::needs_check( $order, $payment_id ) ) {
 				self::check( $order, $payment_id, self::RETURN_TIMEOUT );
 			}
+		} finally {
+			Fynex_WC_Lock::release( Fynex_WC_Payment_Outcome::lock_name( $order_id ), $lease );
+		}
+	}
+
+	/**
+	 * The customer came back through the failure URL, so the hosted session is
+	 * finished for them. Close the attempt here instead of waiting for Fynex's
+	 * cancel webhook; otherwise "Pay" right away would reopen the same session.
+	 * A capture that still arrives for it is applied as usual.
+	 */
+	public static function check_on_failure_return(): void {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only flag; the order key below is the capability.
+		if ( ! isset( $_GET[ self::FAILURE_RETURN_ARG ] ) || ! function_exists( 'is_checkout_pay_page' ) || ! is_checkout_pay_page() ) {
+			return;
+		}
+		global $wp;
+		$order_id = absint( $wp->query_vars['order-pay'] ?? 0 );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- the order key is the capability here, compared with hash_equals() below.
+		$order_key = isset( $_GET['key'] ) && is_string( $_GET['key'] ) ? sanitize_text_field( wp_unslash( $_GET['key'] ) ) : '';
+		if ( $order_id <= 0 || '' === $order_key ) {
+			return;
+		}
+		$lease = Fynex_WC_Lock::acquire( Fynex_WC_Payment_Outcome::lock_name( $order_id ), self::LOCK_LEASE );
+		if ( null === $lease ) {
+			return;
+		}
+		try {
+			$order = Fynex_WC_Payment_Outcome::load_order( $order_id );
+			if ( null === $order || 'fynex' !== $order->get_payment_method() || $order->is_paid() || ! hash_equals( $order->get_order_key(), $order_key ) ) {
+				return;
+			}
+			$payment_id = (string) $order->get_meta( '_fynex_current_payment_id', true );
+			if ( '' === $payment_id || Fynex_WC_Payment_Outcome::attempt_is_final( $order, $payment_id ) ) {
+				return;
+			}
+			$order->update_meta_data( '_fynex_attempt_terminal', 'abandoned' );
+			$order->save();
 		} finally {
 			Fynex_WC_Lock::release( Fynex_WC_Payment_Outcome::lock_name( $order_id ), $lease );
 		}

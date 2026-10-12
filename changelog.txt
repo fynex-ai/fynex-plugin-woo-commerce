@@ -6,10 +6,15 @@
 * Fix - A customer who cancels on the hosted page returns to the pay-for-order form instead of a receipt page with no way to pay.
 * Fix - Payment results are read from lifecycleStatus, with status as the fallback, so orders keep being marked paid after Fynex switches status to the lifecycle values.
 * Add - The order-received page and a background check (every 5 minutes for an hour) read the payment status from Fynex, so a lost webhook cannot leave a paid order pending.
-* Add - One per-order lock for webhooks, status checks, refunds and reconciliation.
+* Add - One per-order lock for checkout, webhooks, status checks, refunds and reconciliation. It inserts its row with INSERT IGNORE; 0.1.0's refund lock used add_option(), which overwrites an existing row, so two processes could both hold it.
+* Fix - A Fynex result no longer changes an order the customer has since paid another way. A capture on such an order, on a cancelled or refunded order, or for an amount that differs from the current order total flags the order for review instead of completing it.
+* Fix - Changing the checkout details (for example the billing country) opens a new Fynex session; reusing the old idempotency key made Fynex refuse the request until the session expired.
+* Fix - A customer who returns through the failure address gets a new Fynex session when paying again.
 * Tweak - Webhook registration subscribes to PaymentCompleted and PaymentRefunded only, refuses non-HTTPS addresses, and replaces an active callback whose signing secret is missing.
 * Tweak - Payment references include a short hash of the site address, so a staging copy on the same key cannot collide.
-* Tweak - Accepted refunds are recorded at once and tagged with the Fynex refund ID; a refund that fails later is flagged with a note naming the record to delete.
+* Tweak - Accepted refunds are recorded at once and tagged with the Fynex refund ID; a refund that fails later is flagged with a note naming the record to delete. Pending refunds are followed for 48 hours.
+* Fix - Retrying a refund after a timeout reuses its idempotency key, also with a different reason, so it cannot refund twice. A confirmed refund WooCommerce refuses to record is retried five times and then left to the merchant instead of retried forever.
+* Tweak - The settings refuse a publishable key (pk_), and the private order note says why Fynex refused a checkout (for example an allowed-return-hosts mismatch).
 * Add - Debug log under WooCommerce → Status → Logs; errors are always logged.
 * Add - The settings screen shows whether the saved key is demo or live; demo checkouts say "Test mode".
 * Add - Translations: Domain Path, POT file, script translations.

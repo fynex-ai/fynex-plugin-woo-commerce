@@ -129,6 +129,93 @@ final class RefundTest extends Fynex_Test_Case {
 		$this->assertTrue( as_has_scheduled_action( 'fynex_woo_reconcile_refund', array( $order->get_id(), $refund_id ), 'fynex-for-woocommerce' ) );
 	}
 
+	public function test_retrying_after_a_timeout_reuses_the_key_even_with_another_reason(): void {
+		list( $order, $payment_id ) = $this->paid_order();
+		$path                       = '/payments/' . $payment_id . '/refund';
+		$this->respond( 'POST', $path, 504, array( 'error' => 'upstream timeout' ) );
+		$this->respond( 'POST', $path, 201, $this->refund_response( wp_generate_uuid4(), $payment_id, 'pending', 10.0 ) );
+
+		$this->assertWPError( $this->refund_from_order_screen( $order, '10.00' ) );
+		wc_create_refund(
+			array(
+				'order_id'       => $order->get_id(),
+				'amount'         => '10.00',
+				'reason'         => 'Reworded reason',
+				'refund_payment' => true,
+			)
+		);
+
+		$requests = $this->requests_to( 'POST', $path );
+		$this->assertCount( 2, $requests );
+		$this->assertSame( $requests[0]['headers']['Idempotency-Key'], $requests[1]['headers']['Idempotency-Key'] );
+	}
+
+	public function test_reconciling_one_refund_keeps_the_key_of_an_unanswered_one(): void {
+		list( $order, $payment_id ) = $this->paid_order();
+		$refund_id                  = wp_generate_uuid4();
+		$this->respond( 'POST', '/payments/' . $payment_id . '/refund', 201, $this->refund_response( $refund_id, $payment_id, 'pending', 10.0 ) );
+		$this->refund_from_order_screen( $order, '10.00' );
+		$order = wc_get_order( $order->get_id() );
+		$order->update_meta_data( '_fynex_refund_submission', array( 'idempotency_key' => 'in-flight-key', 'amount' => 5.0 ) );
+		$order->save();
+		$this->respond( 'GET', '/refunds/' . $refund_id, 200, $this->refund_response( $refund_id, $payment_id, 'succeeded', 10.0 ) );
+
+		Fynex_WC_Refund_Reconciliation::reconcile( $order->get_id(), $refund_id );
+
+		$this->assertSame( 'in-flight-key', wc_get_order( $order->get_id() )->get_meta( '_fynex_refund_submission', true )['idempotency_key'] );
+	}
+
+	public function test_a_record_woocommerce_refuses_stops_retrying_and_does_not_block_new_refunds(): void {
+		list( $order, $payment_id ) = $this->paid_order();
+		$refund_id                  = wp_generate_uuid4();
+		$order->update_meta_data(
+			'_fynex_refunds',
+			array(
+				array(
+					'id'           => $refund_id,
+					'amount'       => 60.0,
+					'status'       => 'pending',
+					'createdAt'    => time(),
+					'reason'       => '',
+					'payment_id'   => $payment_id,
+					'amount_minor' => 6000,
+					'currency'     => 'GBP',
+				),
+			)
+		);
+		$order->save();
+		$this->respond( 'GET', '/refunds/' . $refund_id, 200, $this->refund_response( $refund_id, $payment_id, 'succeeded', 60.0 ) );
+
+		for ( $i = 0; $i < 5; $i++ ) {
+			Fynex_WC_Refund_Reconciliation::reconcile( $order->get_id(), $refund_id );
+		}
+
+		$entry = wc_get_order( $order->get_id() )->get_meta( '_fynex_refunds', true )[0];
+		$this->assertTrue( $entry['local_refund_failed'] );
+		$this->respond( 'POST', '/payments/' . $payment_id . '/refund', 201, $this->refund_response( wp_generate_uuid4(), $payment_id, 'pending', 5.0 ) );
+		$this->assertInstanceOf( WC_Order_Refund::class, $this->refund_from_order_screen( wc_get_order( $order->get_id() ), '5.00' ) );
+	}
+
+	public function test_a_refund_pending_for_hours_is_checked_less_often_not_flagged(): void {
+		list( $order, $payment_id ) = $this->paid_order();
+		$refund_id                  = wp_generate_uuid4();
+		$this->respond( 'POST', '/payments/' . $payment_id . '/refund', 201, $this->refund_response( $refund_id, $payment_id, 'pending', 10.0 ) );
+		$this->refund_from_order_screen( $order, '10.00' );
+		$order   = wc_get_order( $order->get_id() );
+		$refunds = $order->get_meta( '_fynex_refunds', true );
+		$refunds[0]['createdAt'] = time() - 7200;
+		$order->update_meta_data( '_fynex_refunds', $refunds );
+		$order->save();
+		as_unschedule_all_actions( 'fynex_woo_reconcile_refund' );
+		$this->respond( 'GET', '/refunds/' . $refund_id, 200, $this->refund_response( $refund_id, $payment_id, 'pending', 10.0 ) );
+
+		Fynex_WC_Refund_Reconciliation::reconcile( $order->get_id(), $refund_id );
+
+		$this->assertSame( '', wc_get_order( $order->get_id() )->get_meta( '_fynex_refund_attention', true ) );
+		$next = as_next_scheduled_action( 'fynex_woo_reconcile_refund', array( $order->get_id(), $refund_id ), 'fynex-for-woocommerce' );
+		$this->assertGreaterThanOrEqual( time() + 800, $next );
+	}
+
 	public function test_refund_rejected_by_fynex_leaves_no_record(): void {
 		list( $order, $payment_id ) = $this->paid_order();
 		$this->respond( 'POST', '/payments/' . $payment_id . '/refund', 409, array( 'error' => 'refund is already in progress' ) );

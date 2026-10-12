@@ -13,6 +13,7 @@ final class CheckoutTest extends Fynex_Test_Case {
 		$this->assertSame( 'GB', $request['body']['countryCode'] );
 		$this->assertSame( $order->get_checkout_order_received_url(), $request['body']['returnUrls']['success'] );
 		$this->assertStringContainsString( 'pay_for_order=true', $request['body']['returnUrls']['failure'] );
+		$this->assertStringContainsString( Fynex_WC_Payment_Check::FAILURE_RETURN_ARG . '=1', $request['body']['returnUrls']['failure'] );
 		$this->assertTrue( wp_is_uuid( $request['headers']['Idempotency-Key'], 4 ) );
 		$this->assertSame( 'Bearer ' . self::TOKEN, $request['headers']['Authorization'] );
 	}
@@ -59,11 +60,44 @@ final class CheckoutTest extends Fynex_Test_Case {
 		$this->assertFalse( wc_get_order( $order->get_id() )->is_paid() );
 	}
 
+	public function test_fynex_reason_for_a_failed_checkout_goes_into_a_private_order_note(): void {
+		$this->respond( 'POST', '/checkout', 400, array( 'error' => 'returnUrls.success host "shop.example.org" is not in the seller\'s allowed return hosts' ) );
+		$order = $this->create_order();
+
+		$this->gateway()->process_payment( $order->get_id() );
+
+		$notes = wc_get_order_notes( array( 'order_id' => $order->get_id() ) );
+		$this->assertStringContainsString( 'allowed return hosts', $notes[0]->content );
+		$this->assertFalse( $notes[0]->customer_note );
+	}
+
 	public function test_successful_redirect_schedules_a_status_check(): void {
 		$order      = $this->create_order();
 		$payment_id = $this->start_checkout( $order );
 
 		$this->assertTrue( as_has_scheduled_action( 'fynex_woo_check_payment', array( $order->get_id(), $payment_id ), 'fynex-for-woocommerce' ) );
+	}
+
+	public function test_a_changed_checkout_request_opens_a_new_attempt(): void {
+		$order = $this->create_order();
+		$first = $this->start_checkout( $order );
+		$order = wc_get_order( $order->get_id() );
+		$order->set_billing_country( 'DE' );
+		$order->save();
+
+		$second = $this->start_checkout( $order );
+
+		$this->assertNotSame( $first, $second );
+		$this->assertSame( 'DE', $this->requests_to( 'POST', '/checkout' )[1]['body']['countryCode'] );
+	}
+
+	public function test_demo_key_leaves_a_demo_note(): void {
+		$order = $this->create_order();
+
+		$this->start_checkout( $order );
+
+		$notes = wp_list_pluck( wc_get_order_notes( array( 'order_id' => $order->get_id() ) ), 'content' );
+		$this->assertContains( 'Awaiting Fynex payment (demo key, no real money).', $notes );
 	}
 
 	public function test_retry_within_the_session_reuses_the_attempt(): void {

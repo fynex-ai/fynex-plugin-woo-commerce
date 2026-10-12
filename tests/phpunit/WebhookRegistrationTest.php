@@ -72,6 +72,25 @@ final class WebhookRegistrationTest extends Fynex_Test_Case {
 		$this->assertSame( 'kept-secret', get_option( 'fynex_woo_webhook_secret' ) );
 	}
 
+	public function test_a_publishable_key_is_refused_and_the_saved_key_kept(): void {
+		$this->serve_over_https();
+		update_option( 'fynex_woo_api_token', 'sk_test_saved', false );
+		update_option( 'fynex_woo_webhook_secret', 'kept-secret', false );
+		$this->respond( 'GET', '/webhooks', 200, array( 'webhooks' => array( array( 'id' => 7, 'webhookUrl' => self::ENDPOINT, 'status' => 'active' ) ) ) );
+		$gateway = $this->gateway();
+		$_POST   = array(
+			'woocommerce_fynex_enabled'   => '1',
+			'woocommerce_fynex_title'     => 'Fynex',
+			'woocommerce_fynex_api_token' => 'pk_test_publishable',
+		);
+
+		$gateway->process_admin_options();
+
+		$this->assertSame( 'sk_test_saved', get_option( 'fynex_woo_api_token' ) );
+		$this->assertSame( 'kept-secret', get_option( 'fynex_woo_webhook_secret' ) );
+		$this->assertSame( 'publishable', Fynex_WC_API_Client::token_mode( 'pk_live_x' ) );
+	}
+
 	public function test_refuses_to_register_a_plain_http_callback(): void {
 		$this->save_settings();
 

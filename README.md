@@ -18,6 +18,12 @@ entered on Fynex and never touch the store.
 - **Demo and live keys** (`sk_test_…` / `sk_live_…`), with the saved key's mode shown in the settings.
 - **HPOS** with or without compatibility mode, **translations**, and a **debug log**.
 
+## Screenshots
+
+| Checkout block | Settings | Refund from the order screen |
+|---|---|---|
+| ![Fynex in the Checkout block](.wordpress-org/screenshot-1.png) | ![Fynex settings with the saved key's mode and the debug log option](.wordpress-org/screenshot-2.png) | ![An order paid with Fynex and partly refunded](.wordpress-org/screenshot-3.png) |
+
 ## Requirements
 
 - WordPress 6.9+ (tested up to 7.1)
@@ -33,16 +39,29 @@ entered on Fynex and never touch the store.
    registers `https://your-store.example/wp-json/fynex/v1/webhook` and stores the signing
    secret Fynex returns.
 4. Enable Fynex and run a checkout with a test key (see [docs/TESTING.md](docs/TESTING.md)).
-5. To go live, replace the test key with a live key and save again. If Fynex has restricted your account's
-   return addresses, ask Fynex support to add the store's domain; by default any address is accepted.
+5. To go live, create a live secret key (`sk_live_…`) and paste it in place of the test key: the test key
+   stops working once your Fynex account goes live.
+
+The key goes in as a **secret** key: in the Fynex dashboard open **Developers → API keys → New secret key**
+(it is shown once). A publishable key (`pk_…`) does not work here; the older authorization token shown on
+the same page still does.
+
+**Allowed return hosts.** Fynex accepts any return address until your account lists allowed return hosts
+(Developers → Allowed return hosts). Once it lists any, it must include your store's exact host name
+(`shop.example.com` and `www.shop.example.com` are different), or every checkout fails. The failure is
+written to the order notes.
+
+**Upgrading from 0.1.0.** The plugin folder changed from `fynex-woo-commerce` to `fynex-for-woocommerce`, so
+WordPress treats 1.0.0 as a different plugin: deactivate and delete 0.1.0, then install 1.0.0. Settings and
+orders carry over.
 
 ## Documentation
 
 - [WooCommerce integration on fynex.ai](https://fynex.ai/integrations/woocommerce/): what the plugin does for your store
-- [Hosted checkout guide](https://docs.fynex.ai/payments-api/v2/docs#tag/hosted-checkout): the API flow the plugin uses
-- [Webhooks guide](https://docs.fynex.ai/payments-api/v2/docs#tag/webhooks): signing, retries and the 200 contract
-- [Captures & refunds](https://docs.fynex.ai/payments-api/v2/docs#tag/captures-refunds): how refunds are confirmed
-- [Going live](https://docs.fynex.ai/payments-api/v2/docs#tag/going-live): the go-live checklist and live keys
+- [Hosted checkout guide](https://docs.fynex.ai/payments-api/v1/docs/hosted-checkout): the API flow the plugin uses
+- [Webhooks guide](https://docs.fynex.ai/payments-api/v1/docs/webhooks): signing and retries
+- [Captures & refunds](https://docs.fynex.ai/payments-api/v1/docs/captures-refunds): how refunds are confirmed
+- [Going live](https://docs.fynex.ai/payments-api/v1/docs/going-live): the go-live checklist and live keys
 
 ## How a payment moves
 
@@ -75,6 +94,12 @@ customer's name, email, phone or address, and card data never passes through the
 Webhooks are inbound, signed, and carry payment and refund status only. Details are in
 [`readme.txt`](readme.txt) under *External services*; Fynex's
 [privacy policy](https://fynex.ai/legal/privacy-policy/).
+
+## Support
+
+Report a problem or ask a question in [GitHub issues](https://github.com/fynex-ai/fynex-plugin-woo-commerce/issues)
+or through [fynex.ai/contact](https://fynex.ai/contact/). Turn on **Debug log** first and include what
+WooCommerce → Status → Logs → fynex-for-woocommerce shows; it never contains keys or card data.
 
 ## Development
 

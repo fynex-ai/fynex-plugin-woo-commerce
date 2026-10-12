@@ -11,9 +11,10 @@ final class Fynex_WC_API_Client {
 	private string $token;
 	private int $timeout;
 
-	public const MODE_DEMO    = 'demo';
-	public const MODE_LIVE    = 'live';
-	public const MODE_UNKNOWN = 'unknown';
+	public const MODE_DEMO        = 'demo';
+	public const MODE_LIVE        = 'live';
+	public const MODE_PUBLISHABLE = 'publishable';
+	public const MODE_UNKNOWN     = 'unknown';
 
 	/**
 	 * Fynex has no endpoint that reports a token's mode; the key prefix is the
@@ -26,6 +27,9 @@ final class Fynex_WC_API_Client {
 		}
 		if ( 0 === strncmp( $token, 'sk_live_', 8 ) ) {
 			return self::MODE_LIVE;
+		}
+		if ( 0 === strncmp( $token, 'pk_', 3 ) ) {
+			return self::MODE_PUBLISHABLE;
 		}
 		return self::MODE_UNKNOWN;
 	}
