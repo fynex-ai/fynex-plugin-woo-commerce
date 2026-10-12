@@ -38,7 +38,14 @@ function fynex_wc_uninstall_site(): void {
 }
 
 if ( is_multisite() ) {
-	foreach ( get_sites( array( 'fields' => 'ids' ) ) as $fynex_wc_site_id ) {
+	// number => 0 lifts get_sites()' default limit of 100 sites.
+	$fynex_wc_site_ids = get_sites(
+		array(
+			'fields' => 'ids',
+			'number' => 0,
+		)
+	);
+	foreach ( $fynex_wc_site_ids as $fynex_wc_site_id ) {
 		switch_to_blog( (int) $fynex_wc_site_id );
 		fynex_wc_uninstall_site();
 		restore_current_blog();

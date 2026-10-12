@@ -25,15 +25,15 @@ Fynex for WooCommerce adds Fynex as a payment method at checkout. The customer p
 * **High-Performance Order Storage (HPOS)** supported, with or without compatibility mode.
 * **Debug log** under WooCommerce → Status → Logs.
 
-You need a Fynex seller account and an API key from the Fynex dashboard. Your store must be served over HTTPS so Fynex can deliver payment notifications.
+You need a Fynex seller account and a secret API key from the Fynex dashboard (Developers → API keys → New secret key). Your store must be served over HTTPS so Fynex can deliver payment notifications.
 
 = Documentation =
 
 * [WooCommerce integration on fynex.ai](https://fynex.ai/integrations/woocommerce/): what the plugin does for your store
-* [Hosted checkout guide](https://docs.fynex.ai/payments-api/v2/docs#tag/hosted-checkout): the API flow the plugin uses
-* [Webhooks guide](https://docs.fynex.ai/payments-api/v2/docs#tag/webhooks): signing, retries and delivery
-* [Captures & refunds](https://docs.fynex.ai/payments-api/v2/docs#tag/captures-refunds): how refunds are confirmed
-* [Going live](https://docs.fynex.ai/payments-api/v2/docs#tag/going-live): the go-live checklist and live keys
+* [Hosted checkout guide](https://docs.fynex.ai/payments-api/v1/docs/hosted-checkout): the API flow the plugin uses
+* [Webhooks guide](https://docs.fynex.ai/payments-api/v1/docs/webhooks): signing, retries and delivery
+* [Captures & refunds](https://docs.fynex.ai/payments-api/v1/docs/captures-refunds): how refunds are confirmed
+* [Going live](https://docs.fynex.ai/payments-api/v1/docs/going-live): the go-live checklist and live keys
 
 == External services ==
 
@@ -52,15 +52,15 @@ Fynex [Terms of Service](https://fynex.ai/legal/terms/) · [Privacy Policy](http
 
 1. In WordPress, go to **Plugins → Add New**, search for "Fynex for WooCommerce" (or upload the zip), then install and activate it. WooCommerce must be active.
 2. Go to **WooCommerce → Settings → Payments → Fynex**.
-3. Paste your Fynex API key and save. The plugin registers your store's webhook address with Fynex and stores the signing secret it receives.
+3. In the Fynex dashboard open **Developers → API keys**, create a secret key (`sk_test_…` to test) and paste it here, then save. A publishable key (`pk_…`) does not work. The plugin registers your store's webhook address with Fynex and stores the signing secret it receives.
 4. Tick **Enable Fynex payments** and save.
-5. To go live, replace the test key with a live key from the Fynex dashboard and save again.
+5. To go live, create a live secret key (`sk_live_…`) and paste it in place of the test key. The test key stops working once your Fynex account goes live.
 
 == Frequently Asked Questions ==
 
 = How do I test without taking real money? =
 
-Use a test key (`sk_test_…`) from the Fynex dashboard. The settings screen shows "Saved key: demo", checkouts say "Test mode", and you pay with Fynex's [test cards](https://docs.fynex.ai/payments-api/v2/docs#tag/test-cards).
+Use a test secret key (`sk_test_…`) from the Fynex dashboard. The settings screen shows "Saved key: demo", checkouts say "Test mode", and you pay with Fynex's [test cards](https://docs.fynex.ai/payments-api/v1/docs/test-cards).
 
 = Why does saving the settings say Fynex needs an HTTPS address? =
 
@@ -77,6 +77,18 @@ Refund from the order screen as usual. Once Fynex accepts the refund, WooCommerc
 = An order was paid but is still pending. =
 
 The plugin asks Fynex for the payment status when the customer comes back to your store and then every five minutes for an hour, so this resolves itself even if a notification was lost. If it does not, turn on **Debug log** in the settings and check WooCommerce → Status → Logs → fynex-for-woocommerce.
+
+= Checkout fails and the order note mentions allowed return hosts. =
+
+Fynex accepts any return address until your account lists allowed return hosts (Fynex dashboard → Developers → Allowed return hosts). Once it lists any, the list must include your store's exact host name, for example both `shop.example.com` and `www.shop.example.com` if customers use both. Add it there and try again.
+
+= I upgraded from 0.1.0 and now have two Fynex plugins. =
+
+The plugin folder changed in 1.0.0. Deactivate and delete "Fynex for WooCommerce" 0.1.0 (folder `fynex-woo-commerce`), then activate 1.0.0. Settings and orders carry over.
+
+= Where do I get help? =
+
+Open an issue at https://github.com/fynex-ai/fynex-plugin-woo-commerce/issues or contact Fynex at https://fynex.ai/contact/. Turn on **Debug log** first and include what WooCommerce → Status → Logs → fynex-for-woocommerce shows.
 
 = Does the plugin store card data? =
 
@@ -95,6 +107,8 @@ No. Card details are entered on the Fynex-hosted page. Your store keeps only the
 * The basket is kept when a customer leaves the hosted page; a cancelled customer can pay again from the pay-for-order page.
 * Orders are marked paid from `lifecycleStatus`, ready for Fynex's change to the `status` field.
 * If a webhook is lost, the payment status is read when the customer returns and every five minutes for an hour.
+* A Fynex result never changes an order that was since paid another way, was cancelled, or changed its total; such cases are flagged for review.
+* A refund retried after a timeout cannot refund twice.
 * Accepted refunds are recorded at once instead of showing an error; a refund that fails later is flagged with the record to delete.
 * Webhook registration subscribes only to payment and refund events and replaces a callback whose secret was lost.
 * Debug log, demo/live indicator, translations, uninstall cleanup, privacy-policy text.

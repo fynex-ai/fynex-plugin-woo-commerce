@@ -112,6 +112,65 @@ final class WebhookTest extends Fynex_Test_Case {
 		$this->assertSame( 200, $this->deliver_webhook( 'KYBVerificationApproved', array( 'applicantId' => 'abc' ) )->get_status() );
 	}
 
+	public function test_cancel_for_an_order_now_paid_another_way_leaves_it_alone(): void {
+		$order      = $this->create_order();
+		$payment_id = $this->start_checkout( $order );
+		$this->switch_to_bank_transfer( $order );
+
+		$this->deliver_webhook( 'PaymentCompleted', $this->payment_completed( $payment_id, 'cancelled' ) );
+
+		$this->assertSame( 'on-hold', wc_get_order( $order->get_id() )->get_status() );
+	}
+
+	public function test_capture_for_an_order_now_paid_another_way_is_flagged_not_completed(): void {
+		$order      = $this->create_order();
+		$payment_id = $this->start_checkout( $order );
+		$this->switch_to_bank_transfer( $order );
+
+		$this->deliver_webhook( 'PaymentCompleted', $this->payment_completed( $payment_id, 'captured' ) );
+
+		$order = wc_get_order( $order->get_id() );
+		$this->assertSame( 'on-hold', $order->get_status() );
+		$this->assertSame( 'yes', $order->get_meta( '_fynex_payment_attention', true ) );
+		$this->assertSame( '', $order->get_meta( '_fynex_paid_payment_id', true ) );
+	}
+
+	public function test_capture_for_a_cancelled_order_is_flagged_not_reopened(): void {
+		$order      = $this->create_order();
+		$payment_id = $this->start_checkout( $order );
+		$order      = wc_get_order( $order->get_id() );
+		$order->update_status( 'cancelled' );
+
+		$this->deliver_webhook( 'PaymentCompleted', $this->payment_completed( $payment_id, 'captured' ) );
+
+		$order = wc_get_order( $order->get_id() );
+		$this->assertSame( 'cancelled', $order->get_status() );
+		$this->assertSame( 'yes', $order->get_meta( '_fynex_payment_attention', true ) );
+	}
+
+	public function test_capture_of_the_old_amount_after_the_total_changed_is_flagged(): void {
+		$order      = $this->create_order( '49.99' );
+		$payment_id = $this->start_checkout( $order );
+		$order      = wc_get_order( $order->get_id() );
+		$order->set_total( '79.99' );
+		$order->save();
+
+		$this->deliver_webhook( 'PaymentCompleted', $this->payment_completed( $payment_id, 'captured', 4999 ) );
+
+		$order = wc_get_order( $order->get_id() );
+		$this->assertFalse( $order->is_paid() );
+		$this->assertSame( 'yes', $order->get_meta( '_fynex_payment_attention', true ) );
+	}
+
+	private function switch_to_bank_transfer( WC_Order $order ): void {
+		// WooCommerce resumes the same pending order when the customer goes back and picks another method.
+		$order = wc_get_order( $order->get_id() );
+		$order->set_payment_method( 'bacs' );
+		$order->set_payment_method_title( 'Direct bank transfer' );
+		$order->update_status( 'on-hold' );
+		$order->save();
+	}
+
 	public function test_busy_order_asks_fynex_to_retry(): void {
 		$order      = $this->create_order();
 		$payment_id = $this->start_checkout( $order );

@@ -49,7 +49,7 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 				'description' => __( 'Card details are entered on Fynex, not on this store.', 'fynex-for-woocommerce' ),
 			),
 			'api_token'      => array(
-				'title'       => __( 'Fynex API token', 'fynex-for-woocommerce' ),
+				'title'       => __( 'Fynex secret key', 'fynex-for-woocommerce' ),
 				'type'        => 'password',
 				'description' => self::token_mode_description( (string) get_option( 'fynex_woo_api_token', '' ) ),
 			),
@@ -72,14 +72,15 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 	 * The token alone decides demo or live, so the settings screen says which one is saved.
 	 */
 	private static function token_mode_description( string $token ): string {
-		$help = __( 'Seller API key from the Fynex dashboard. A test key (sk_test_…) takes demo payments, a live key (sk_live_…) takes real ones.', 'fynex-for-woocommerce' );
+		$help = __( 'Secret key from the Fynex dashboard: Developers → API keys → New secret key. A test key (sk_test_…) takes demo payments, a live key (sk_live_…) takes real ones.', 'fynex-for-woocommerce' );
 		if ( '' === trim( $token ) ) {
 			return $help;
 		}
 		$modes = array(
-			Fynex_WC_API_Client::MODE_DEMO    => __( 'Saved key: demo. No real money moves.', 'fynex-for-woocommerce' ),
-			Fynex_WC_API_Client::MODE_LIVE    => __( 'Saved key: live. Customers are charged.', 'fynex-for-woocommerce' ),
-			Fynex_WC_API_Client::MODE_UNKNOWN => __( 'Saved key: older token format; its mode is set by the seller account in Fynex.', 'fynex-for-woocommerce' ),
+			Fynex_WC_API_Client::MODE_DEMO        => __( 'Saved key: demo. No real money moves.', 'fynex-for-woocommerce' ),
+			Fynex_WC_API_Client::MODE_LIVE        => __( 'Saved key: live. Customers are charged.', 'fynex-for-woocommerce' ),
+			Fynex_WC_API_Client::MODE_PUBLISHABLE => __( 'Saved key: publishable. It cannot take payments; paste a secret key.', 'fynex-for-woocommerce' ),
+			Fynex_WC_API_Client::MODE_UNKNOWN     => __( 'Saved key: older token format; its mode is set by the seller account in Fynex.', 'fynex-for-woocommerce' ),
 		);
 		return '<strong>' . esc_html( $modes[ Fynex_WC_API_Client::token_mode( $token ) ] ) . '</strong> ' . esc_html( $help );
 	}
@@ -100,6 +101,12 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		$this->init_settings();
 		$submitted_token  = trim( (string) $this->get_option( 'api_token' ) );
 		$submitted_secret = trim( (string) $this->get_option( 'webhook_secret' ) );
+		// The dashboard offers publishable keys next to secret ones; a publishable key
+		// cannot create checkouts, so keep the key that was saved before.
+		if ( Fynex_WC_API_Client::MODE_PUBLISHABLE === Fynex_WC_API_Client::token_mode( $submitted_token ) ) {
+			$this->admin_error( __( 'That is a publishable key (pk_…), which cannot take payments. Paste a secret key (sk_test_… or sk_live_…) from Developers → API keys in the Fynex dashboard.', 'fynex-for-woocommerce' ) );
+			$submitted_token = '';
+		}
 		if ( '' !== $submitted_token ) {
 			update_option( 'fynex_woo_api_token', $submitted_token, false );
 			if ( ! hash_equals( $previous_token, $submitted_token ) ) {
@@ -123,12 +130,31 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 	}
 
 	public function process_payment( $order_id ): array {
-		$order = wc_get_order( $order_id );
-		if ( ! $order instanceof WC_Order ) {
-			return array( 'result' => 'failure' );
-		}
+		$order_id = absint( $order_id );
 		if ( '' === trim( $this->api_token ) || '' === trim( $this->webhook_secret ) ) {
 			wc_add_notice( __( 'Fynex is not fully configured. Please contact the store administrator.', 'fynex-for-woocommerce' ), 'error' );
+			return array( 'result' => 'failure' );
+		}
+		// Webhooks and status checks update the same attempt meta and status.
+		$lock  = Fynex_WC_Payment_Outcome::lock_name( $order_id );
+		$lease = Fynex_WC_Lock::acquire_waiting( $lock, 60, 10 );
+		if ( null === $lease ) {
+			wc_add_notice( __( 'This order is being updated. Please try again in a moment.', 'fynex-for-woocommerce' ), 'error' );
+			return array( 'result' => 'failure' );
+		}
+		try {
+			return $this->start_checkout( $order_id );
+		} finally {
+			Fynex_WC_Lock::release( $lock, $lease );
+		}
+	}
+
+	/**
+	 * @return array<string,string>
+	 */
+	private function start_checkout( int $order_id ): array {
+		$order = Fynex_WC_Payment_Outcome::load_order( $order_id );
+		if ( null === $order ) {
 			return array( 'result' => 'failure' );
 		}
 
@@ -138,27 +164,31 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 			return array( 'result' => 'failure' );
 		}
 
-		$attempt = $this->prepare_payment_attempt( $order );
-		$payload = array(
-			'externalOrderRef' => $attempt['payment_id'],
-			'amount'           => $amount,
-			'currencyCode'     => $order->get_currency(),
-			'countryCode'      => $this->country_code( $order ),
-			'autoSettlement'   => true,
-			'returnUrls'       => array(
+		$request = array(
+			'amount'         => $amount,
+			'currencyCode'   => $order->get_currency(),
+			'countryCode'    => $this->country_code( $order ),
+			'autoSettlement' => true,
+			'returnUrls'     => array(
 				'success' => $this->get_return_url( $order ),
 				// The pay-for-order form, so a customer who cancels can retry; the
 				// on-checkout variant is a receipt page with no way to pay.
-				'failure' => $order->get_checkout_payment_url(),
+				'failure' => add_query_arg( Fynex_WC_Payment_Check::FAILURE_RETURN_ARG, '1', $order->get_checkout_payment_url() ),
 			),
 			/* translators: %s: order number */
-			'description'      => sprintf( __( 'Order #%s', 'fynex-for-woocommerce' ), $order->get_order_number() ),
+			'description'    => sprintf( __( 'Order #%s', 'fynex-for-woocommerce' ), $order->get_order_number() ),
 		);
+		$attempt = $this->prepare_payment_attempt( $order, md5( (string) wp_json_encode( $request ) ) );
+		$payload = array( 'externalOrderRef' => $attempt['payment_id'] ) + $request;
 
 		$client   = new Fynex_WC_API_Client( $this->api_token );
 		$response = $client->create_checkout( $payload, $attempt['idempotency_key'] );
 		if ( is_wp_error( $response ) || empty( $response['checkoutUrl'] ) || ! is_string( $response['checkoutUrl'] ) ) {
-			$order->add_order_note( __( 'Fynex checkout session could not be created.', 'fynex-for-woocommerce' ) );
+			$reason = is_wp_error( $response ) ? $response->get_error_message() : __( 'Fynex returned no checkout address.', 'fynex-for-woocommerce' );
+			// Private note: Fynex's reason (an allowed-return-hosts mismatch, a disabled currency)
+			// is what the merchant needs to fix it; the customer only sees the generic notice.
+			/* translators: %s: reason returned by Fynex */
+			$order->add_order_note( sprintf( __( 'Fynex checkout session could not be created: %s', 'fynex-for-woocommerce' ), sanitize_text_field( $reason ) ) );
 			wc_add_notice( __( 'Unable to start Fynex checkout. Please try again.', 'fynex-for-woocommerce' ), 'error' );
 			return array( 'result' => 'failure' );
 		}
@@ -169,8 +199,9 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		}
 		// The cart is left intact: WooCommerce empties it on the order-received page, so a
 		// customer who abandons the hosted page comes back to their basket.
-		$order->update_status(
-			'pending',
+		$order->update_status( 'pending' );
+		// update_status() adds no note when the order is already pending, which a new order is.
+		$order->add_order_note(
 			Fynex_WC_API_Client::MODE_DEMO === Fynex_WC_API_Client::token_mode( $this->api_token )
 				? __( 'Awaiting Fynex payment (demo key, no real money).', 'fynex-for-woocommerce' )
 				: __( 'Awaiting Fynex payment.', 'fynex-for-woocommerce' )
@@ -201,12 +232,12 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 			return new WP_Error( 'fynex_missing_payment', __( 'No Fynex payment is associated with this order.', 'fynex-for-woocommerce' ) );
 		}
 
-		$amount = null === $amount ? (float) $order->get_total() : (float) $amount;
+		$amount = null === $amount ? (float) $order->get_remaining_refund_amount() : (float) $amount;
 		if ( $amount <= 0 ) {
 			return new WP_Error( 'fynex_invalid_refund', __( 'Refund amount must be greater than zero.', 'fynex-for-woocommerce' ) );
 		}
 		foreach ( $this->refunds( $order ) as $refund ) {
-			if ( ! empty( $refund['local_refund_id'] ) || ! in_array( $refund['status'] ?? '', array( 'pending', 'succeeded' ), true ) ) {
+			if ( ! empty( $refund['local_refund_id'] ) || ! empty( $refund['local_refund_failed'] ) || ! in_array( $refund['status'] ?? '', array( 'pending', 'succeeded' ), true ) ) {
 				continue;
 			}
 			if ( (float) ( $refund['amount'] ?? 0 ) === $amount && (string) ( $refund['reason'] ?? '' ) === (string) $reason ) {
@@ -250,11 +281,14 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 	 * @return bool|WP_Error
 	 */
 	private function submit_refund( int $order_id, string $payment_id, float $amount, string $reason ) {
-		$order        = wc_get_order( $order_id );
+		$order        = Fynex_WC_Payment_Outcome::load_order( $order_id );
 		$local_refund = self::$creating_refunds[ $order_id ] ?? null;
 		unset( self::$creating_refunds[ $order_id ] );
+		if ( null === $order ) {
+			return new WP_Error( 'fynex_refund_unavailable', __( 'Fynex refund is unavailable.', 'fynex-for-woocommerce' ) );
+		}
 
-		$submission = $this->refund_submission( $order, $amount, $reason );
+		$submission = $this->refund_submission( $order, $amount );
 		$response   = ( new Fynex_WC_API_Client( $this->api_token ) )->refund( $payment_id, $amount, $submission['idempotency_key'] );
 		if ( is_wp_error( $response ) ) {
 			$error_data = $response->get_error_data();
@@ -320,15 +354,19 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		return true;
 	}
 
-	private function refund_submission( WC_Order $order, float $amount, string $reason ): array {
+	/**
+	 * The idempotency key of a refund whose outcome is unknown (a timeout, a 5xx) is
+	 * kept until Fynex answers definitively, so retrying the same amount cannot refund
+	 * twice. Only the amount is compared: the reason is not sent to Fynex.
+	 */
+	private function refund_submission( WC_Order $order, float $amount ): array {
 		$stored = $order->get_meta( '_fynex_refund_submission', true );
-		if ( is_array( $stored ) && isset( $stored['idempotency_key'], $stored['amount'], $stored['reason'] ) && (float) $stored['amount'] === $amount && (string) $stored['reason'] === $reason ) {
+		if ( is_array( $stored ) && isset( $stored['idempotency_key'], $stored['amount'] ) && (float) $stored['amount'] === $amount ) {
 			return $stored;
 		}
 		$submission = array(
 			'idempotency_key' => wp_generate_uuid4(),
 			'amount'          => $amount,
-			'reason'          => $reason,
 		);
 		$order->update_meta_data( '_fynex_refund_submission', $submission );
 		$order->save();
@@ -340,12 +378,19 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		return is_array( $refunds ) ? $refunds : array();
 	}
 
-	private function prepare_payment_attempt( WC_Order $order ): array {
+	/**
+	 * Reuses the open attempt while the checkout request is unchanged, so repeated
+	 * clicks get the same hosted session. Fynex refuses a reused idempotency key with
+	 * a different body (409), so any change, such as a new billing country, opens a
+	 * new attempt.
+	 */
+	private function prepare_payment_attempt( WC_Order $order, string $fingerprint ): array {
 		$terminal   = (string) $order->get_meta( '_fynex_attempt_terminal', true );
 		$payment    = (string) $order->get_meta( '_fynex_current_payment_id', true );
 		$key        = (string) $order->get_meta( '_fynex_current_idempotency_key', true );
+		$same       = (string) $order->get_meta( '_fynex_current_fingerprint', true ) === $fingerprint;
 		$expires_at = strtotime( (string) $order->get_meta( '_fynex_checkout_expires_at', true ) );
-		if ( '' !== $payment && '' !== $key && '' === $terminal && ( false === $expires_at || $expires_at > time() ) ) {
+		if ( '' !== $payment && '' !== $key && '' === $terminal && $same && ( false === $expires_at || $expires_at > time() ) ) {
 			return array(
 				'payment_id'      => $payment,
 				'idempotency_key' => $key,
@@ -358,6 +403,7 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		$order->update_meta_data( '_fynex_attempt', $attempt );
 		$order->update_meta_data( '_fynex_current_payment_id', $payment );
 		$order->update_meta_data( '_fynex_current_idempotency_key', $key );
+		$order->update_meta_data( '_fynex_current_fingerprint', $fingerprint );
 		$order->add_meta_data( '_fynex_payment_id', $payment, false );
 		$attempts   = $this->payment_attempts( $order );
 		$attempts[] = array(

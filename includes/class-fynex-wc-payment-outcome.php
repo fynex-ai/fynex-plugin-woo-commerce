@@ -10,6 +10,11 @@ defined( 'ABSPATH' ) || exit;
  * (see lock_name()) and load the order after acquiring it.
  */
 final class Fynex_WC_Payment_Outcome {
+	private const GATEWAY_ID = 'fynex';
+
+	/** Statuses an unpaid order may be in for a Fynex capture to complete it automatically. */
+	private const PAYABLE_STATUSES = array( 'pending', 'failed', 'on-hold' );
+
 	public const CAPTURED  = 'captured';
 	public const FAILED    = 'failed';
 	public const CANCELLED = 'cancelled';
@@ -22,6 +27,19 @@ final class Fynex_WC_Payment_Outcome {
 
 	public static function lock_name( int $order_id ): string {
 		return 'order_' . $order_id;
+	}
+
+	/**
+	 * Loads the order bypassing caches that another request may have filled before
+	 * the caller took the order lock.
+	 */
+	public static function load_order( int $order_id ): ?WC_Order {
+		clean_post_cache( $order_id );
+		if ( class_exists( \Automattic\WooCommerce\Caches\OrderCache::class ) ) {
+			wc_get_container()->get( \Automattic\WooCommerce\Caches\OrderCache::class )->remove( $order_id );
+		}
+		$order = wc_get_order( $order_id );
+		return $order instanceof WC_Order ? $order : null;
 	}
 
 	/**
@@ -55,19 +73,24 @@ final class Fynex_WC_Payment_Outcome {
 			return;
 		}
 		self::update_attempt_status( $order, $payment_id, $outcome );
-		if ( $order->is_paid() || $payment_id !== (string) $order->get_meta( '_fynex_current_payment_id', true ) ) {
+		if ( $payment_id !== (string) $order->get_meta( '_fynex_current_payment_id', true ) ) {
 			return;
 		}
 		$order->update_meta_data( '_fynex_attempt_terminal', $outcome );
-		$order->update_status( 'failed', __( 'Fynex reported that the payment did not complete.', 'fynex-for-woocommerce' ) );
+		// A customer who went back and chose another payment method keeps the same order,
+		// so only an order still waiting on Fynex is failed.
+		if ( self::GATEWAY_ID === $order->get_payment_method() && $order->has_status( 'pending' ) ) {
+			$order->update_status( 'failed', __( 'Fynex reported that the payment did not complete.', 'fynex-for-woocommerce' ) );
+		}
 	}
 
 	/**
-	 * Whether the attempt already reached a result, so polling it again is pointless.
+	 * Whether polling the attempt again is pointless. Only a capture is final: Fynex
+	 * can turn a failed payment into a captured one later.
 	 */
 	public static function attempt_is_final( WC_Order $order, string $payment_id ): bool {
 		$attempt = self::attempt( $order, $payment_id );
-		return is_array( $attempt ) && in_array( $attempt['status'] ?? '', array( self::CAPTURED, self::FAILED, self::CANCELLED ), true );
+		return is_array( $attempt ) && self::CAPTURED === ( $attempt['status'] ?? '' );
 	}
 
 	private static function apply_captured( WC_Order $order, string $payment_id, ?int $amount_minor, string $currency ): void {
@@ -95,10 +118,44 @@ final class Fynex_WC_Payment_Outcome {
 			}
 			return;
 		}
+		$conflict = self::capture_conflict( $order, $payment_id, (int) $amount_minor, $currency );
+		if ( '' !== $conflict ) {
+			Fynex_WC_Logger::warning(
+				'Fynex captured a payment this order cannot take automatically; the order was flagged.',
+				array(
+					'order_id'   => $order->get_id(),
+					'payment_id' => $payment_id,
+				)
+			);
+			$order->update_meta_data( '_fynex_payment_attention', 'yes' );
+			$order->add_order_note( $conflict );
+			return;
+		}
 		$order->update_meta_data( '_fynex_paid_payment_id', $payment_id );
 		$order->delete_meta_data( '_fynex_attempt_terminal' );
 		$order->payment_complete( $payment_id );
 		$order->add_order_note( __( 'Fynex confirmed the payment.', 'fynex-for-woocommerce' ) );
+	}
+
+	/**
+	 * Why a capture that matches its attempt still must not complete the order, or ''.
+	 * The money has been taken in each case, so the merchant decides.
+	 */
+	private static function capture_conflict( WC_Order $order, string $payment_id, int $amount_minor, string $currency ): string {
+		if ( self::GATEWAY_ID !== $order->get_payment_method() ) {
+			/* translators: 1: Fynex payment reference, 2: name of the payment method the order now uses */
+			return sprintf( __( 'Fynex captured payment %1$s, but this order is now paid with %2$s. Review it and refund one of the two payments.', 'fynex-for-woocommerce' ), $payment_id, $order->get_payment_method_title() );
+		}
+		if ( ! $order->has_status( self::PAYABLE_STATUSES ) ) {
+			/* translators: 1: Fynex payment reference, 2: order status, e.g. Cancelled */
+			return sprintf( __( 'Fynex captured payment %1$s while this order is %2$s. Reinstate the order or refund the payment.', 'fynex-for-woocommerce' ), $payment_id, wc_get_order_status_name( $order->get_status() ) );
+		}
+		$order_total_minor = (int) round( (float) $order->get_total() * 100 );
+		if ( $order_total_minor !== $amount_minor ) {
+			/* translators: 1: amount Fynex captured, 2: current order total */
+			return sprintf( __( 'Fynex captured %1$s, but the order total is now %2$s. Review before fulfilling.', 'fynex-for-woocommerce' ), wc_price( $amount_minor / 100, array( 'currency' => $currency ) ), wc_price( (float) $order->get_total(), array( 'currency' => $order->get_currency() ) ) );
+		}
+		return '';
 	}
 
 	private static function matches_attempt( WC_Order $order, string $payment_id, ?int $amount_minor, string $currency ): bool {

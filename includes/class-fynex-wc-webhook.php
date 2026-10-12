@@ -62,8 +62,8 @@ final class Fynex_WC_Webhook {
 			return new WP_REST_Response( array( 'received' => false ), 503 );
 		}
 		try {
-			$order = wc_get_order( $order_id );
-			if ( $order instanceof WC_Order && ! self::was_processed( $order, (string) $event['eventId'] ) ) {
+			$order = Fynex_WC_Payment_Outcome::load_order( $order_id );
+			if ( null !== $order && ! self::was_processed( $order, (string) $event['eventId'] ) ) {
 				self::apply_event( $order, $payment_id, (string) $event['eventType'], $event['payload'] );
 				self::remember_event( $order, (string) $event['eventId'] );
 				$order->save();
