@@ -9,6 +9,23 @@ permissions:
   contents: read
 
 jobs:
+  standards:
+    name: Coding standards and PHP compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+      - name: Install dev dependencies
+        run: composer install --no-interaction --no-progress
+      - name: PHPCS (WooCommerce-Core, PHPCompatibilityWP 7.4+)
+        run: vendor/bin/phpcs
+
   unit:
     name: PHPUnit (PHP ${{ matrix.php }}, WP ${{ matrix.wp }}, WC ${{ matrix.wc }}, ${{ matrix.storage }})
     runs-on: ubuntu-latest

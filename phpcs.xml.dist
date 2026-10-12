@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<ruleset name="Fynex for WooCommerce">
+	<description>WooCommerce coding standards and PHP compatibility for the shipped plugin code.</description>
+
+	<file>fynex-for-woocommerce.php</file>
+	<file>includes</file>
+
+	<arg name="extensions" value="php"/>
+	<arg name="colors"/>
+	<arg value="sp"/>
+
+	<!-- Requires PHP in the plugin header. -->
+	<config name="testVersion" value="7.4-"/>
+	<!-- Requires at least in the plugin header. -->
+	<config name="minimum_wp_version" value="6.9"/>
+
+	<rule ref="WooCommerce-Core">
+		<!--
+		Documentation sniffs (a docblock on every file, class, property and
+		method) are WordPress-Docs territory, not correctness or security. The
+		code documents what is non-obvious and keeps self-explanatory code
+		uncommented; mandatory boilerplate would bury those comments.
+		-->
+		<exclude name="Squiz.Commenting"/>
+		<exclude name="Generic.Commenting.DocComment"/>
+	</rule>
+	<rule ref="PHPCompatibilityWP"/>
+
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="fynex-for-woocommerce"/>
+			</property>
+		</properties>
+	</rule>
+
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="fynex"/>
+			</property>
+		</properties>
+	</rule>
+</ruleset>

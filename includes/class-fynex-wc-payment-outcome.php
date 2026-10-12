@@ -108,7 +108,7 @@ final class Fynex_WC_Payment_Outcome {
 			return null;
 		}
 		foreach ( $attempts as $attempt ) {
-			if ( is_array( $attempt ) && $payment_id === ( $attempt['payment_id'] ?? '' ) ) {
+			if ( is_array( $attempt ) && ( $attempt['payment_id'] ?? '' ) === $payment_id ) {
 				return $attempt;
 			}
 		}
@@ -121,7 +121,7 @@ final class Fynex_WC_Payment_Outcome {
 			return;
 		}
 		foreach ( $attempts as &$attempt ) {
-			if ( is_array( $attempt ) && $payment_id === ( $attempt['payment_id'] ?? '' ) ) {
+			if ( is_array( $attempt ) && ( $attempt['payment_id'] ?? '' ) === $payment_id ) {
 				$attempt['status'] = $status;
 			}
 		}

@@ -113,10 +113,11 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 				// on-checkout variant is a receipt page with no way to pay.
 				'failure' => $order->get_checkout_payment_url(),
 			),
+			/* translators: %s: order number */
 			'description'      => sprintf( __( 'Order #%s', 'fynex-for-woocommerce' ), $order->get_order_number() ),
 		);
 
-		$client  = new Fynex_WC_API_Client( $this->api_token );
+		$client   = new Fynex_WC_API_Client( $this->api_token );
 		$response = $client->create_checkout( $payload, $attempt['idempotency_key'] );
 		if ( is_wp_error( $response ) || empty( $response['checkoutUrl'] ) || ! is_string( $response['checkoutUrl'] ) ) {
 			$order->add_order_note( __( 'Fynex checkout session could not be created.', 'fynex-for-woocommerce' ) );
@@ -165,7 +166,7 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 			if ( ! empty( $refund['local_refund_id'] ) || ! in_array( $refund['status'] ?? '', array( 'pending', 'succeeded' ), true ) ) {
 				continue;
 			}
-			if ( $amount === (float) ( $refund['amount'] ?? 0 ) && (string) $reason === (string) ( $refund['reason'] ?? '' ) ) {
+			if ( (float) ( $refund['amount'] ?? 0 ) === $amount && (string) ( $refund['reason'] ?? '' ) === (string) $reason ) {
 				return new WP_Error( 'fynex_refund_pending', __( 'This Fynex refund is already pending confirmation.', 'fynex-for-woocommerce' ) );
 			}
 			return new WP_Error( 'fynex_refund_pending', __( 'Another Fynex refund is pending confirmation for this order.', 'fynex-for-woocommerce' ) );
@@ -194,16 +195,17 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		$order->delete_meta_data( '_fynex_refund_submission' );
 		$refunds   = $this->refunds( $order );
 		$refunds[] = array(
-			'id'        => sanitize_text_field( $response['id'] ),
-			'amount'    => $amount,
-			'status'    => 'pending',
-			'createdAt' => time(),
+			'id'           => sanitize_text_field( $response['id'] ),
+			'amount'       => $amount,
+			'status'       => 'pending',
+			'createdAt'    => time(),
 			'reason'       => sanitize_text_field( (string) $reason ),
 			'payment_id'   => $payment_id,
 			'amount_minor' => (int) round( $amount * 100 ),
 			'currency'     => strtoupper( $order->get_currency() ),
 		);
 		$order->update_meta_data( '_fynex_refunds', $refunds );
+		/* translators: 1: Fynex refund ID, 2: refund amount */
 		$order->add_order_note( sprintf( __( 'Fynex refund %1$s submitted for %2$s.', 'fynex-for-woocommerce' ), $response['id'], wc_price( $amount, array( 'currency' => $order->get_currency() ) ) ) );
 		$order->save();
 
@@ -216,7 +218,11 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		if ( is_array( $stored ) && isset( $stored['idempotency_key'], $stored['amount'], $stored['reason'] ) && (float) $stored['amount'] === $amount && (string) $stored['reason'] === $reason ) {
 			return $stored;
 		}
-		$submission = array( 'idempotency_key' => wp_generate_uuid4(), 'amount' => $amount, 'reason' => $reason );
+		$submission = array(
+			'idempotency_key' => wp_generate_uuid4(),
+			'amount'          => $amount,
+			'reason'          => $reason,
+		);
 		$order->update_meta_data( '_fynex_refund_submission', $submission );
 		$order->save();
 		return $submission;
@@ -228,12 +234,15 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 	}
 
 	private function prepare_payment_attempt( WC_Order $order ): array {
-		$terminal = (string) $order->get_meta( '_fynex_attempt_terminal', true );
-		$payment  = (string) $order->get_meta( '_fynex_current_payment_id', true );
-		$key      = (string) $order->get_meta( '_fynex_current_idempotency_key', true );
+		$terminal   = (string) $order->get_meta( '_fynex_attempt_terminal', true );
+		$payment    = (string) $order->get_meta( '_fynex_current_payment_id', true );
+		$key        = (string) $order->get_meta( '_fynex_current_idempotency_key', true );
 		$expires_at = strtotime( (string) $order->get_meta( '_fynex_checkout_expires_at', true ) );
 		if ( '' !== $payment && '' !== $key && '' === $terminal && ( false === $expires_at || $expires_at > time() ) ) {
-			return array( 'payment_id' => $payment, 'idempotency_key' => $key );
+			return array(
+				'payment_id'      => $payment,
+				'idempotency_key' => $key,
+			);
 		}
 
 		$attempt = max( 0, (int) $order->get_meta( '_fynex_attempt', true ) ) + 1;
@@ -255,7 +264,10 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		$order->delete_meta_data( '_fynex_checkout_expires_at' );
 		$order->set_transaction_id( $payment );
 		$order->save();
-		return array( 'payment_id' => $payment, 'idempotency_key' => $key );
+		return array(
+			'payment_id'      => $payment,
+			'idempotency_key' => $key,
+		);
 	}
 
 	/**

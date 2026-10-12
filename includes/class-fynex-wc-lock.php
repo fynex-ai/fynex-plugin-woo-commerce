@@ -28,7 +28,16 @@ final class Fynex_WC_Lock {
 		}
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- compare-and-swap takeover of an expired lease; see the class comment.
-		$updated = $wpdb->update( $wpdb->options, array( 'option_value' => $lease ), array( 'option_name' => $option, 'option_value' => $current ), array( '%s' ), array( '%s', '%s' ) );
+		$updated = $wpdb->update(
+			$wpdb->options,
+			array( 'option_value' => $lease ),
+			array(
+				'option_name'  => $option,
+				'option_value' => $current,
+			),
+			array( '%s' ),
+			array( '%s', '%s' )
+		);
 		self::clear_cache( $option );
 		return 1 === $updated ? $lease : null;
 	}
@@ -52,7 +61,14 @@ final class Fynex_WC_Lock {
 		global $wpdb;
 		$option = self::PREFIX . $name;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- deletes the row only while it still holds this process's lease.
-		$wpdb->delete( $wpdb->options, array( 'option_name' => $option, 'option_value' => $lease ), array( '%s', '%s' ) );
+		$wpdb->delete(
+			$wpdb->options,
+			array(
+				'option_name'  => $option,
+				'option_value' => $lease,
+			),
+			array( '%s', '%s' )
+		);
 		self::clear_cache( $option );
 	}
 

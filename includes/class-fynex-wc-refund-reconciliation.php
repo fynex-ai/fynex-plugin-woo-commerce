@@ -3,9 +3,9 @@
 defined( 'ABSPATH' ) || exit;
 
 final class Fynex_WC_Refund_Reconciliation {
-	private const ACTION = 'fynex_woo_reconcile_refund';
-	private const GROUP  = 'fynex-for-woocommerce';
-	private const MAX_AGE_SECONDS = 1200;
+	private const ACTION             = 'fynex_woo_reconcile_refund';
+	private const GROUP              = 'fynex-for-woocommerce';
+	private const MAX_AGE_SECONDS    = 1200;
 	private const LOCK_LEASE_SECONDS = 300;
 
 	public static function register(): void {
@@ -79,7 +79,7 @@ final class Fynex_WC_Refund_Reconciliation {
 
 	private static function matches_values( WC_Order $order, string $refund_id, string $payment_id, $amount_minor, string $currency ): bool {
 		foreach ( self::refunds( $order ) as $refund ) {
-			if ( $refund_id !== ( $refund['id'] ?? '' ) ) {
+			if ( ( $refund['id'] ?? '' ) !== $refund_id ) {
 				continue;
 			}
 			return (string) ( $refund['payment_id'] ?? '' ) === $payment_id
@@ -100,6 +100,7 @@ final class Fynex_WC_Refund_Reconciliation {
 			$changed = self::update_refund_status( $order, $refund_id, 'succeeded' );
 			self::ensure_local_refund( $order, $refund_id );
 			if ( $changed ) {
+				/* translators: %s: Fynex refund ID */
 				$order->add_order_note( sprintf( __( 'Fynex confirmed refund %s.', 'fynex-for-woocommerce' ), $refund_id ) );
 			}
 			$order->save();
@@ -116,7 +117,7 @@ final class Fynex_WC_Refund_Reconciliation {
 			}
 		}
 		foreach ( self::refunds( $order ) as $refund ) {
-			if ( $refund_id !== ( $refund['id'] ?? '' ) || ! empty( $refund['local_refund_id'] ) ) {
+			if ( ( $refund['id'] ?? '' ) !== $refund_id || ! empty( $refund['local_refund_id'] ) ) {
 				continue;
 			}
 			$marker = static function ( $local_refund, $args ) use ( $refund_id, $order ): void {
@@ -128,11 +129,11 @@ final class Fynex_WC_Refund_Reconciliation {
 			try {
 				$local_refund = wc_create_refund(
 					array(
-					'amount'                 => (float) ( $refund['amount'] ?? 0 ),
-					'reason'                 => (string) ( $refund['reason'] ?? '' ),
-					'order_id'               => $order->get_id(),
-					'refund_payment'         => false,
-					'restock_refunded_items' => false,
+						'amount'                 => (float) ( $refund['amount'] ?? 0 ),
+						'reason'                 => (string) ( $refund['reason'] ?? '' ),
+						'order_id'               => $order->get_id(),
+						'refund_payment'         => false,
+						'restock_refunded_items' => false,
 					)
 				);
 			} finally {
@@ -152,7 +153,7 @@ final class Fynex_WC_Refund_Reconciliation {
 	private static function set_local_refund_id( WC_Order $order, string $refund_id, int $local_refund_id ): void {
 		$refunds = self::refunds( $order );
 		foreach ( $refunds as &$refund ) {
-			if ( is_array( $refund ) && $refund_id === ( $refund['id'] ?? '' ) ) {
+			if ( is_array( $refund ) && ( $refund['id'] ?? '' ) === $refund_id ) {
 				$refund['local_refund_id'] = $local_refund_id;
 			}
 		}
@@ -163,6 +164,7 @@ final class Fynex_WC_Refund_Reconciliation {
 	private static function mark_failed( WC_Order $order, string $refund_id ): void {
 		if ( self::update_refund_status( $order, $refund_id, 'failed' ) ) {
 			$order->update_meta_data( '_fynex_refund_attention', 'yes' );
+			/* translators: %s: Fynex refund ID */
 			$order->add_order_note( sprintf( __( 'Fynex refund %s failed. Review this refund before issuing another one.', 'fynex-for-woocommerce' ), $refund_id ) );
 		}
 	}
@@ -177,6 +179,7 @@ final class Fynex_WC_Refund_Reconciliation {
 				return;
 			}
 			$order->update_meta_data( '_fynex_refund_attention', 'yes' );
+			/* translators: %s: Fynex refund ID */
 			$order->add_order_note( sprintf( __( 'Fynex refund %s is still pending after 20 minutes. Contact Fynex support before retrying.', 'fynex-for-woocommerce' ), $refund_id ) );
 			$order->save();
 			return;
@@ -189,7 +192,7 @@ final class Fynex_WC_Refund_Reconciliation {
 		foreach ( $refunds as &$refund ) {
 			if ( ( $refund['id'] ?? '' ) === $refund_id && ( $refund['status'] ?? '' ) !== $status ) {
 				$refund['status'] = $status;
-				$changed = true;
+				$changed          = true;
 			}
 		}
 		unset( $refund );

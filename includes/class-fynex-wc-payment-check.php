@@ -121,7 +121,7 @@ final class Fynex_WC_Payment_Check {
 	private static function too_old( WC_Order $order, string $payment_id ): bool {
 		$attempts = $order->get_meta( '_fynex_payment_attempts', true );
 		foreach ( is_array( $attempts ) ? $attempts : array() as $attempt ) {
-			if ( is_array( $attempt ) && $payment_id === ( $attempt['payment_id'] ?? '' ) ) {
+			if ( is_array( $attempt ) && ( $attempt['payment_id'] ?? '' ) === $payment_id ) {
 				return time() - (int) ( $attempt['created_at'] ?? 0 ) > self::MAX_AGE_SECONDS;
 			}
 		}
