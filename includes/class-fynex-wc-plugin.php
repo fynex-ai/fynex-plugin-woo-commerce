@@ -20,6 +20,14 @@ final class Fynex_WC_Plugin {
 		add_action( 'woocommerce_blocks_payment_method_type_registration', array( __CLASS__, 'register_blocks' ) );
 	}
 
+	/**
+	 * The plugin is not distributed through WordPress.org alone, so translations
+	 * shipped in languages/ have to be loaded explicitly.
+	 */
+	public static function load_textdomain(): void {
+		load_plugin_textdomain( 'fynex-for-woocommerce', false, dirname( plugin_basename( FYNEX_WC_FILE ) ) . '/languages' );
+	}
+
 	public static function register_gateway( array $gateways ): array {
 		$gateways[] = 'Fynex_WC_Gateway';
 		return $gateways;

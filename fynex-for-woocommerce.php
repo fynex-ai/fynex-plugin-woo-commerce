@@ -12,6 +12,7 @@
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: fynex-for-woocommerce
+ * Domain Path: /languages
  * WC requires at least: 10.9
  * WC tested up to: 11.2
  */
@@ -43,3 +44,4 @@ add_action(
 );
 
 add_action( 'plugins_loaded', array( 'Fynex_WC_Plugin', 'bootstrap' ), 20 );
+add_action( 'init', array( 'Fynex_WC_Plugin', 'load_textdomain' ) );

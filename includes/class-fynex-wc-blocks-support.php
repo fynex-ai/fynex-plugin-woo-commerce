@@ -22,10 +22,11 @@ final class Fynex_WC_Blocks_Support extends AbstractPaymentMethodType {
 		wp_register_script(
 			'fynex-for-woocommerce-blocks',
 			FYNEX_WC_URL . 'assets/js/blocks.js',
-			array( 'wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-html-entities' ),
+			array( 'wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-html-entities', 'wp-i18n' ),
 			FYNEX_WC_VERSION,
 			true
 		);
+		wp_set_script_translations( 'fynex-for-woocommerce-blocks', 'fynex-for-woocommerce', FYNEX_WC_DIR . 'languages' );
 		return array( 'fynex-for-woocommerce-blocks' );
 	}
 
