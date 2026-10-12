@@ -31,25 +31,34 @@ final class Fynex_WC_Webhook {
 			$raw_body,
 			$secret
 		) ) {
+			Fynex_WC_Logger::warning( 'Fynex webhook rejected: signature or timestamp did not verify. Check that the stored signing secret matches the callback in Fynex.' );
 			return new WP_REST_Response( array( 'received' => false ), 401 );
 		}
 
 		$event = json_decode( $raw_body, true );
 		if ( ! is_array( $event ) || empty( $event['eventId'] ) || empty( $event['eventType'] ) || empty( $event['payload'] ) || ! is_array( $event['payload'] ) ) {
+			Fynex_WC_Logger::warning( 'Fynex webhook rejected: the signed body is not a valid event.' );
 			return new WP_REST_Response( array( 'received' => false ), 400 );
 		}
 
+		$context    = array(
+			'event_id'   => (string) $event['eventId'],
+			'event_type' => (string) $event['eventType'],
+		);
 		$payment_id = self::payment_id( $event );
 		$order_id   = self::find_order_id( $payment_id );
 		if ( null === $order_id ) {
+			Fynex_WC_Logger::info( 'Fynex webhook acknowledged without an order to update.', $context + array( 'payment_id' => $payment_id ) );
 			return new WP_REST_Response( array( 'received' => true ), 200 );
 		}
+		$context['order_id'] = $order_id;
 
 		// Fynex counts only HTTP 200 as delivered, and its delivery timeout is ten
 		// seconds, so wait a little for a concurrent writer and otherwise ask for a retry.
 		$lock  = Fynex_WC_Payment_Outcome::lock_name( $order_id );
 		$lease = Fynex_WC_Lock::acquire_waiting( $lock, self::LOCK_LEASE_SECONDS, self::LOCK_WAIT_SECONDS );
 		if ( null === $lease ) {
+			Fynex_WC_Logger::warning( 'Fynex webhook deferred: the order is being updated by another request; Fynex will retry.', $context );
 			return new WP_REST_Response( array( 'received' => false ), 503 );
 		}
 		try {
@@ -58,6 +67,7 @@ final class Fynex_WC_Webhook {
 				self::apply_event( $order, $payment_id, (string) $event['eventType'], $event['payload'] );
 				self::remember_event( $order, (string) $event['eventId'] );
 				$order->save();
+				Fynex_WC_Logger::info( 'Fynex webhook applied.', $context + array( 'order_status' => $order->get_status() ) );
 			}
 		} finally {
 			Fynex_WC_Lock::release( $lock, $lease );

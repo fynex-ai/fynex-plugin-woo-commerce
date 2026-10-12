@@ -110,6 +110,14 @@ final class Fynex_WC_Payment_Check {
 			return;
 		}
 		$outcome = Fynex_WC_Payment_Outcome::from_status_fields( $response );
+		Fynex_WC_Logger::info(
+			'Fynex payment status checked.',
+			array(
+				'order_id'   => $order->get_id(),
+				'payment_id' => $payment_id,
+				'status'     => (string) ( $response['lifecycleStatus'] ?? $response['status'] ?? '' ),
+			)
+		);
 		if ( '' === $outcome ) {
 			return;
 		}

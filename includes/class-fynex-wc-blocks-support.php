@@ -33,7 +33,7 @@ final class Fynex_WC_Blocks_Support extends AbstractPaymentMethodType {
 	public function get_payment_method_data(): array {
 		return array(
 			'title'       => $this->settings['title'] ?? __( 'Fynex', 'fynex-for-woocommerce' ),
-			'description' => $this->settings['description'] ?? __( 'Pay securely on Fynex hosted checkout.', 'fynex-for-woocommerce' ),
+			'description' => Fynex_WC_Gateway::checkout_description( $this->settings['description'] ?? __( 'Pay securely on Fynex hosted checkout.', 'fynex-for-woocommerce' ), (string) get_option( 'fynex_woo_api_token', '' ) ),
 			'supports'    => $this->supported_features(),
 		);
 	}

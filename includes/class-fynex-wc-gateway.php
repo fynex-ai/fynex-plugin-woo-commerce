@@ -16,9 +16,9 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		$this->init_form_fields();
 		$this->init_settings();
 		$this->title          = (string) $this->get_option( 'title', __( 'Fynex', 'fynex-for-woocommerce' ) );
-		$this->description    = (string) $this->get_option( 'description', __( 'Pay securely on Fynex hosted checkout.', 'fynex-for-woocommerce' ) );
 		$this->api_token      = $this->secret_option( 'fynex_woo_api_token', 'api_token' );
 		$this->webhook_secret = $this->secret_option( 'fynex_woo_webhook_secret', 'webhook_secret' );
+		$this->description    = self::checkout_description( (string) $this->get_option( 'description', __( 'Pay securely on Fynex hosted checkout.', 'fynex-for-woocommerce' ) ), $this->api_token );
 		$this->enabled        = (string) $this->get_option( 'enabled', 'no' );
 
 		add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
@@ -48,14 +48,47 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 			'api_token'      => array(
 				'title'       => __( 'Fynex API token', 'fynex-for-woocommerce' ),
 				'type'        => 'password',
-				'description' => __( 'Seller token from Fynex. This plugin always uses api.fynex.ai; there is no environment setting.', 'fynex-for-woocommerce' ),
+				'description' => self::token_mode_description( (string) get_option( 'fynex_woo_api_token', '' ) ),
 			),
 			'webhook_secret' => array(
 				'title'       => __( 'Webhook signing secret', 'fynex-for-woocommerce' ),
 				'type'        => 'password',
 				'description' => __( 'Saved automatically when this plugin registers its callback. If the callback already exists, paste its signing secret here.', 'fynex-for-woocommerce' ),
 			),
+			'debug'          => array(
+				'title'       => __( 'Debug log', 'fynex-for-woocommerce' ),
+				'type'        => 'checkbox',
+				'label'       => __( 'Log Fynex requests and webhooks', 'fynex-for-woocommerce' ),
+				'default'     => 'no',
+				'description' => __( 'Logs go to WooCommerce → Status → Logs, source fynex-for-woocommerce. Errors are logged even when this is off. Logs never contain the API token, the signing secret or card data.', 'fynex-for-woocommerce' ),
+			),
 		);
+	}
+
+	/**
+	 * The token alone decides demo or live, so the settings screen says which one is saved.
+	 */
+	private static function token_mode_description( string $token ): string {
+		$help = __( 'Seller API key from the Fynex dashboard. A test key (sk_test_…) takes demo payments, a live key (sk_live_…) takes real ones.', 'fynex-for-woocommerce' );
+		if ( '' === trim( $token ) ) {
+			return $help;
+		}
+		$modes = array(
+			Fynex_WC_API_Client::MODE_DEMO    => __( 'Saved key: demo. No real money moves.', 'fynex-for-woocommerce' ),
+			Fynex_WC_API_Client::MODE_LIVE    => __( 'Saved key: live. Customers are charged.', 'fynex-for-woocommerce' ),
+			Fynex_WC_API_Client::MODE_UNKNOWN => __( 'Saved key: older token format; its mode is set by the seller account in Fynex.', 'fynex-for-woocommerce' ),
+		);
+		return '<strong>' . esc_html( $modes[ Fynex_WC_API_Client::token_mode( $token ) ] ) . '</strong> ' . esc_html( $help );
+	}
+
+	/**
+	 * Marks the payment method at checkout while a demo key is saved, so test orders are recognisable.
+	 */
+	public static function checkout_description( string $description, string $token ): string {
+		if ( Fynex_WC_API_Client::MODE_DEMO !== Fynex_WC_API_Client::token_mode( $token ) ) {
+			return $description;
+		}
+		return trim( __( 'Test mode: no real payment is taken.', 'fynex-for-woocommerce' ) . ' ' . $description );
 	}
 
 	public function process_admin_options(): bool {
@@ -81,6 +114,8 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		if ( $result && '' !== trim( $this->api_token ) ) {
 			$this->ensure_webhook_registration();
 		}
+		// Rebuild the fields so the settings page rendered after saving shows the new key's mode.
+		$this->init_form_fields();
 		return $result;
 	}
 
@@ -131,7 +166,12 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		}
 		// The cart is left intact: WooCommerce empties it on the order-received page, so a
 		// customer who abandons the hosted page comes back to their basket.
-		$order->update_status( 'pending', __( 'Awaiting Fynex payment.', 'fynex-for-woocommerce' ) );
+		$order->update_status(
+			'pending',
+			Fynex_WC_API_Client::MODE_DEMO === Fynex_WC_API_Client::token_mode( $this->api_token )
+				? __( 'Awaiting Fynex payment (demo key, no real money).', 'fynex-for-woocommerce' )
+				: __( 'Awaiting Fynex payment.', 'fynex-for-woocommerce' )
+		);
 		$order->save();
 
 		Fynex_WC_Payment_Check::schedule( (int) $order->get_id(), $attempt['payment_id'] );
@@ -360,6 +400,7 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 	}
 
 	private function admin_error( string $message ): void {
+		Fynex_WC_Logger::warning( 'Fynex settings: ' . $message );
 		WC_Admin_Settings::add_error( $message );
 	}
 

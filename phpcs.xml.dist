@@ -4,6 +4,7 @@
 
 	<file>fynex-for-woocommerce.php</file>
 	<file>includes</file>
+	<file>uninstall.php</file>
 
 	<arg name="extensions" value="php"/>
 	<arg name="colors"/>

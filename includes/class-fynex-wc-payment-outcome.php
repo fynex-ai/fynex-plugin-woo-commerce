@@ -72,6 +72,15 @@ final class Fynex_WC_Payment_Outcome {
 
 	private static function apply_captured( WC_Order $order, string $payment_id, ?int $amount_minor, string $currency ): void {
 		if ( ! self::matches_attempt( $order, $payment_id, $amount_minor, $currency ) ) {
+			Fynex_WC_Logger::warning(
+				'Fynex reported a captured payment that does not match the attempt; the order was not marked paid.',
+				array(
+					'order_id'     => $order->get_id(),
+					'payment_id'   => $payment_id,
+					'amount_minor' => $amount_minor,
+					'currency'     => $currency,
+				)
+			);
 			if ( 'yes' !== $order->get_meta( '_fynex_payment_attention', true ) ) {
 				$order->update_meta_data( '_fynex_payment_attention', 'yes' );
 				$order->add_order_note( __( 'Fynex payment completion did not match the expected attempt amount or currency. Review before fulfilling.', 'fynex-for-woocommerce' ) );

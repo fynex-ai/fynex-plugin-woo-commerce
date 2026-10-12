@@ -11,6 +11,25 @@ final class Fynex_WC_API_Client {
 	private string $token;
 	private int $timeout;
 
+	public const MODE_DEMO    = 'demo';
+	public const MODE_LIVE    = 'live';
+	public const MODE_UNKNOWN = 'unknown';
+
+	/**
+	 * Fynex has no endpoint that reports a token's mode; the key prefix is the
+	 * signal (sk_test_ for demo, sk_live_ for live). Older tokens carry none.
+	 */
+	public static function token_mode( string $token ): string {
+		$token = trim( $token );
+		if ( 0 === strncmp( $token, 'sk_test_', 8 ) ) {
+			return self::MODE_DEMO;
+		}
+		if ( 0 === strncmp( $token, 'sk_live_', 8 ) ) {
+			return self::MODE_LIVE;
+		}
+		return self::MODE_UNKNOWN;
+	}
+
 	public function __construct( string $token, int $timeout = 20 ) {
 		$this->token   = trim( $token );
 		$this->timeout = $timeout;
@@ -104,6 +123,13 @@ final class Fynex_WC_API_Client {
 			)
 		);
 		if ( is_wp_error( $response ) ) {
+			Fynex_WC_Logger::error(
+				'Fynex API request failed before a response.',
+				array(
+					'request' => $method . ' ' . $path,
+					'error'   => $response->get_error_message(),
+				)
+			);
 			return new WP_Error( 'fynex_network_error', __( 'Fynex could not be reached. Please try again.', 'fynex-for-woocommerce' ) );
 		}
 
@@ -116,9 +142,24 @@ final class Fynex_WC_API_Client {
 			$message = isset( $decoded['error'] ) && is_string( $decoded['error'] )
 				? $decoded['error']
 				: __( 'Fynex rejected the request.', 'fynex-for-woocommerce' );
+			Fynex_WC_Logger::warning(
+				'Fynex API rejected a request.',
+				array(
+					'request' => $method . ' ' . $path,
+					'status'  => $status,
+					'error'   => $message,
+				)
+			);
 			return new WP_Error( 'fynex_api_error', $message, array( 'status' => $status ) );
 		}
 
+		Fynex_WC_Logger::info(
+			'Fynex API request succeeded.',
+			array(
+				'request' => $method . ' ' . $path,
+				'status'  => $status,
+			)
+		);
 		return $decoded;
 	}
 

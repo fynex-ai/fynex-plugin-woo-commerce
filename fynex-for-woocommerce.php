@@ -24,6 +24,7 @@ define( 'FYNEX_WC_FILE', __FILE__ );
 define( 'FYNEX_WC_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FYNEX_WC_URL', plugin_dir_url( __FILE__ ) );
 
+require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-logger.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-webhook-verifier.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-api-client.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-lock.php';
