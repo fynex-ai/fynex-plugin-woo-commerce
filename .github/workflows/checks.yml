@@ -9,12 +9,49 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  unit:
+    name: PHPUnit (PHP ${{ matrix.php }}, WP ${{ matrix.wp }}, WC ${{ matrix.wc }}, ${{ matrix.storage }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { php: '8.3', wp: 'latest', wc: 'latest', storage: 'posts' }
+          - { php: '8.3', wp: 'latest', wc: 'latest', storage: 'hpos' }
+    env:
+      WP_CORE_DIR: /tmp/wordpress
+      WP_TESTS_DB_HOST: 127.0.0.1
+      WP_TESTS_DB_USER: root
+      WP_TESTS_DB_PASSWORD: root
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli
+          coverage: none
+          tools: composer:v2
+      - name: Start MySQL
+        run: sudo systemctl start mysql.service
+      - name: Syntax and standalone load
+        run: ./bin/test
+      - name: Install dev dependencies
+        run: composer install --no-interaction --no-progress
+      - name: Install WordPress and WooCommerce
+        run: ./bin/install-test-env ${{ matrix.wp }} ${{ matrix.wc }}
+      - name: PHPUnit
+        run: vendor/bin/phpunit
+        env:
+          FYNEX_TEST_HPOS: ${{ matrix.storage == 'hpos' && '1' || '0' }}
+
+  package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-      - name: PHP syntax and webhook tests
-        run: ./bin/test-docker
+        with:
+          persist-credentials: false
       - name: Build installable plugin zip
         run: ./bin/package
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

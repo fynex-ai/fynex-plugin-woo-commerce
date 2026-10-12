@@ -109,7 +109,9 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 			'autoSettlement'   => true,
 			'returnUrls'       => array(
 				'success' => $this->get_return_url( $order ),
-				'failure' => $order->get_checkout_payment_url( true ),
+				// The pay-for-order form, so a customer who cancels can retry; the
+				// on-checkout variant is a receipt page with no way to pay.
+				'failure' => $order->get_checkout_payment_url(),
 			),
 			'description'      => sprintf( __( 'Order #%s', 'fynex-woo-commerce' ), $order->get_order_number() ),
 		);
@@ -126,9 +128,12 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		if ( isset( $response['expiresAt'] ) && is_string( $response['expiresAt'] ) ) {
 			$order->update_meta_data( '_fynex_checkout_expires_at', sanitize_text_field( $response['expiresAt'] ) );
 		}
+		// The cart is left intact: WooCommerce empties it on the order-received page, so a
+		// customer who abandons the hosted page comes back to their basket.
 		$order->update_status( 'pending', __( 'Awaiting Fynex payment.', 'fynex-woo-commerce' ) );
 		$order->save();
-		WC()->cart->empty_cart();
+
+		Fynex_WC_Payment_Check::schedule( (int) $order->get_id(), $attempt['payment_id'] );
 
 		return array(
 			'result'   => 'success',
@@ -232,7 +237,7 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		}
 
 		$attempt = max( 0, (int) $order->get_meta( '_fynex_attempt', true ) ) + 1;
-		$payment = sprintf( 'wc-%d-%d', $order->get_id(), $attempt );
+		$payment = sprintf( 'wc-%s-%d-%d', self::site_reference(), $order->get_id(), $attempt );
 		$key     = wp_generate_uuid4();
 		$order->update_meta_data( '_fynex_attempt', $attempt );
 		$order->update_meta_data( '_fynex_current_payment_id', $payment );
@@ -251,6 +256,16 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		$order->set_transaction_id( $payment );
 		$order->save();
 		return array( 'payment_id' => $payment, 'idempotency_key' => $key );
+	}
+
+	/**
+	 * Fynex resolves refunds and status reads to the newest payment with a given
+	 * externalOrderRef, and does not enforce uniqueness. A staging copy of the
+	 * store using the same token would reuse order IDs, so the reference carries
+	 * a short hash of the site URL to keep two sites from sharing one.
+	 */
+	private static function site_reference(): string {
+		return substr( md5( untrailingslashit( home_url() ) ), 0, 8 );
 	}
 
 	private function secret_option( string $option, string $legacy_key ): string {
@@ -288,24 +303,34 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 	}
 
 	private function ensure_webhook_registration(): void {
-		$client   = new Fynex_WC_API_Client( $this->api_token );
 		$endpoint = rest_url( 'fynex/v1/webhook' );
-		$list     = $client->list_webhooks();
+		if ( 0 !== strpos( $endpoint, 'https://' ) ) {
+			$this->admin_error( __( 'Fynex sends payment updates only to a public HTTPS address. Serve this store over HTTPS, then save the settings again.', 'fynex-woo-commerce' ) );
+			return;
+		}
+
+		$client = new Fynex_WC_API_Client( $this->api_token );
+		$list   = $client->list_webhooks();
 		if ( is_wp_error( $list ) ) {
 			$this->admin_error( __( 'Fynex webhook could not be checked. Verify the API token and try saving again.', 'fynex-woo-commerce' ) );
 			return;
 		}
+		$rotated = false;
 		foreach ( (array) ( $list['webhooks'] ?? array() ) as $webhook ) {
-			if ( ! is_array( $webhook ) || ( $webhook['webhookUrl'] ?? '' ) !== $endpoint ) {
+			if ( ! is_array( $webhook ) || ( $webhook['webhookUrl'] ?? '' ) !== $endpoint || 'active' !== ( $webhook['status'] ?? '' ) ) {
 				continue;
 			}
-			if ( 'active' === ( $webhook['status'] ?? '' ) && '' === trim( $this->webhook_secret ) ) {
-				$this->admin_error( __( 'The Fynex callback is already active but its one-time signing secret is not stored here. Paste the secret from the original registration or rotate it in Fynex before enabling this gateway.', 'fynex-woo-commerce' ) );
+			if ( '' !== trim( $this->webhook_secret ) ) {
 				return;
 			}
-			if ( 'active' === ( $webhook['status'] ?? '' ) ) {
+			// Fynex returns a signing secret only when the callback is created, so a
+			// callback this store has no secret for is replaced with a new one.
+			$deleted = $client->delete_webhook( $webhook['id'] ?? '' );
+			if ( is_wp_error( $deleted ) ) {
+				$this->admin_error( __( 'The Fynex callback for this store exists but its signing secret is not stored here, and it could not be replaced. Paste the secret from the original registration, or delete the callback in Fynex and save again.', 'fynex-woo-commerce' ) );
 				return;
 			}
+			$rotated = true;
 		}
 
 		$created = $client->create_webhook( $endpoint );
@@ -315,7 +340,11 @@ final class Fynex_WC_Gateway extends WC_Payment_Gateway {
 		}
 		update_option( 'fynex_woo_webhook_secret', $created['secretKey'], false );
 		$this->webhook_secret = $created['secretKey'];
-		$this->admin_success( __( 'Fynex webhook registered and signing secret saved.', 'fynex-woo-commerce' ) );
+		$this->admin_success(
+			$rotated
+				? __( 'Fynex webhook replaced and its new signing secret saved.', 'fynex-woo-commerce' )
+				: __( 'Fynex webhook registered and signing secret saved.', 'fynex-woo-commerce' )
+		);
 	}
 
 	private function admin_error( string $message ): void {

@@ -7,9 +7,6 @@ use Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodTyp
 final class Fynex_WC_Blocks_Support extends AbstractPaymentMethodType {
 	protected $name = 'fynex';
 
-	/** @var array<string,mixed> */
-	private array $settings = array();
-
 	public function initialize(): void {
 		$settings       = get_option( 'woocommerce_fynex_settings', array() );
 		$this->settings = is_array( $settings ) ? $settings : array();
@@ -36,7 +33,21 @@ final class Fynex_WC_Blocks_Support extends AbstractPaymentMethodType {
 		return array(
 			'title'       => $this->settings['title'] ?? __( 'Fynex', 'fynex-woo-commerce' ),
 			'description' => $this->settings['description'] ?? __( 'Pay securely on Fynex hosted checkout.', 'fynex-woo-commerce' ),
-			'supports'    => array( 'products' ),
+			'supports'    => $this->supported_features(),
 		);
+	}
+
+	/**
+	 * Mirrors the classic gateway so both checkouts offer the same features.
+	 *
+	 * @return array<int,string>
+	 */
+	private function supported_features(): array {
+		$gateways = WC()->payment_gateways()->payment_gateways();
+		if ( ! isset( $gateways['fynex'] ) ) {
+			return array( 'products' );
+		}
+		$gateway = $gateways['fynex'];
+		return array_values( array_filter( $gateway->supports, array( $gateway, 'supports' ) ) );
 	}
 }

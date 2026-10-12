@@ -1,0 +1,34 @@
+#!/usr/bin/env sh
+# Downloads WordPress and WooCommerce for the PHPUnit suite and creates the test
+# database. Usage: bin/install-test-env [wp-version] [wc-version]
+set -eu
+wp_version=${1:-${WP_VERSION:-latest}}
+wc_version=${2:-${WC_VERSION:-latest}}
+core_dir=${WP_CORE_DIR:-/tmp/wordpress}
+db_name=${WP_TESTS_DB_NAME:-wordpress_test}
+db_user=${WP_TESTS_DB_USER:-root}
+db_pass=${WP_TESTS_DB_PASSWORD:-root}
+db_host=${WP_TESTS_DB_HOST:-127.0.0.1}
+tmp=$(mktemp -d)
+
+if [ "$wp_version" = latest ]; then
+	core_url=https://wordpress.org/latest.tar.gz
+else
+	core_url="https://wordpress.org/wordpress-$wp_version.tar.gz"
+fi
+if [ "$wc_version" = latest ]; then
+	wc_url=https://downloads.wordpress.org/plugin/woocommerce.zip
+else
+	wc_url="https://downloads.wordpress.org/plugin/woocommerce.$wc_version.zip"
+fi
+
+rm -rf "$core_dir"
+mkdir -p "$core_dir"
+curl -fsSL "$core_url" | tar -xz --strip-components=1 -C "$core_dir"
+curl -fsSL -o "$tmp/woocommerce.zip" "$wc_url"
+unzip -q "$tmp/woocommerce.zip" -d "$core_dir/wp-content/plugins"
+ln -s "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" "$core_dir/wp-content/plugins/fynex-plugin"
+rm -rf "$tmp"
+
+mysql --host="$db_host" --user="$db_user" --password="$db_pass" -e "DROP DATABASE IF EXISTS \`$db_name\`; CREATE DATABASE \`$db_name\`;"
+echo "WordPress $(sed -n "s/^\$wp_version = '\(.*\)';/\1/p" "$core_dir/wp-includes/version.php") and WooCommerce $wc_version installed in $core_dir"

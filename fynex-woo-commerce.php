@@ -24,6 +24,9 @@ define( 'FYNEX_WC_URL', plugin_dir_url( __FILE__ ) );
 
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-webhook-verifier.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-api-client.php';
+require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-lock.php';
+require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-payment-outcome.php';
+require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-payment-check.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-webhook.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-refund-reconciliation.php';
 require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-plugin.php';
@@ -33,6 +36,7 @@ add_action(
 	static function (): void {
 		if ( class_exists( '\Automattic\\WooCommerce\\Utilities\\FeaturesUtil' ) ) {
 			\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', FYNEX_WC_FILE, true );
+			\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'cart_checkout_blocks', FYNEX_WC_FILE, true );
 		}
 	}
 );

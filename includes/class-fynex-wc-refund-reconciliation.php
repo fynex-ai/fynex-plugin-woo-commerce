@@ -61,7 +61,6 @@ final class Fynex_WC_Refund_Reconciliation {
 		self::reschedule_if_current( $order, $refund_id );
 	}
 
-
 	/** @param array<string,mixed> $payload */
 	public static function matches_webhook( WC_Order $order, string $refund_id, array $payload ): bool {
 		return self::matches_values(
@@ -91,8 +90,8 @@ final class Fynex_WC_Refund_Reconciliation {
 	}
 
 	public static function mark_succeeded( WC_Order $order, string $refund_id ): void {
-		$lock = 'fynex_woo_refund_lock_' . md5( $order->get_id() . ':' . $refund_id );
-		$lease = self::acquire_lock( $lock );
+		$lock  = 'refund_' . md5( $order->get_id() . ':' . $refund_id );
+		$lease = Fynex_WC_Lock::acquire( $lock, self::LOCK_LEASE_SECONDS );
 		if ( null === $lease ) {
 			self::schedule( (int) $order->get_id(), $refund_id );
 			return;
@@ -105,45 +104,8 @@ final class Fynex_WC_Refund_Reconciliation {
 			}
 			$order->save();
 		} finally {
-			self::release_lock( $lock, $lease );
+			Fynex_WC_Lock::release( $lock, $lease );
 		}
-	}
-
-
-
-
-	private static function acquire_lock( string $lock ): ?string {
-		$lease = wp_generate_uuid4() . ':' . ( time() + self::LOCK_LEASE_SECONDS );
-		self::clear_lock_cache( $lock );
-		if ( add_option( $lock, $lease, '', false ) ) {
-			return $lease;
-		}
-		$current = get_option( $lock, '' );
-		$parts   = is_string( $current ) ? explode( ':', $current ) : array();
-		$expires = (int) end( $parts );
-		if ( $expires >= time() || '' === $current ) {
-			return null;
-		}
-		global $wpdb;
-		$updated = $wpdb->update( $wpdb->options, array( 'option_value' => $lease ), array( 'option_name' => $lock, 'option_value' => $current ), array( '%s' ), array( '%s', '%s' ) );
-		if ( 1 !== $updated ) {
-			return null;
-		}
-		self::clear_lock_cache( $lock );
-		return $lease;
-	}
-
-	private static function release_lock( string $lock, string $lease ): void {
-		global $wpdb;
-		$deleted = $wpdb->delete( $wpdb->options, array( 'option_name' => $lock, 'option_value' => $lease ), array( '%s', '%s' ) );
-		if ( 1 === $deleted ) {
-			self::clear_lock_cache( $lock );
-		}
-	}
-
-	private static function clear_lock_cache( string $lock ): void {
-		wp_cache_delete( $lock, 'options' );
-		wp_cache_delete( $lock, 'notoptions' );
 	}
 
 	private static function ensure_local_refund( WC_Order $order, string $refund_id ): void {

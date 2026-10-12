@@ -5,10 +5,15 @@ defined( 'ABSPATH' ) || exit;
 final class Fynex_WC_API_Client {
 	private const API_BASE = 'https://api.fynex.ai/payments-api/v1';
 
-	private string $token;
+	/** Event types the plugin acts on; anything else would only be acknowledged. */
+	public const WEBHOOK_EVENT_TYPES = array( 'PaymentCompleted', 'PaymentRefunded' );
 
-	public function __construct( string $token ) {
-		$this->token = trim( $token );
+	private string $token;
+	private int $timeout;
+
+	public function __construct( string $token, int $timeout = 20 ) {
+		$this->token   = trim( $token );
+		$this->timeout = $timeout;
 	}
 
 	/**
@@ -22,7 +27,22 @@ final class Fynex_WC_API_Client {
 	 * @return array<string, mixed>|WP_Error
 	 */
 	public function create_webhook( string $url ) {
-		return $this->request( 'POST', '/webhooks', array( 'webhookUrl' => $url ) );
+		return $this->request(
+			'POST',
+			'/webhooks',
+			array(
+				'webhookUrl' => $url,
+				'eventTypes' => self::WEBHOOK_EVENT_TYPES,
+			)
+		);
+	}
+
+	/**
+	 * @param int|string $webhook_id
+	 * @return array<string, mixed>|WP_Error
+	 */
+	public function delete_webhook( $webhook_id ) {
+		return $this->request( 'DELETE', '/webhooks/' . rawurlencode( (string) $webhook_id ) );
 	}
 
 	/**
@@ -30,6 +50,13 @@ final class Fynex_WC_API_Client {
 	 */
 	public function list_webhooks() {
 		return $this->request( 'GET', '/webhooks' );
+	}
+
+	/**
+	 * @return array<string, mixed>|WP_Error
+	 */
+	public function get_payment( string $payment_id ) {
+		return $this->request( 'GET', '/payments/' . rawurlencode( $payment_id ) );
 	}
 
 	/**
@@ -67,10 +94,10 @@ final class Fynex_WC_API_Client {
 		}
 
 		$response = wp_remote_request(
-			self::API_BASE . $path,
+			self::api_base() . $path,
 			array(
 				'method'      => $method,
-				'timeout'     => 20,
+				'timeout'     => $this->timeout,
 				'redirection' => 0,
 				'headers'     => $headers,
 				'body'        => null === $body ? null : wp_json_encode( $body ),
@@ -93,5 +120,16 @@ final class Fynex_WC_API_Client {
 		}
 
 		return $decoded;
+	}
+
+	/**
+	 * FYNEX_WC_API_BASE lets Fynex point a test store at a non-production API.
+	 * Merchants never set it; the token alone selects demo or live.
+	 */
+	private static function api_base(): string {
+		if ( defined( 'FYNEX_WC_API_BASE' ) && is_string( FYNEX_WC_API_BASE ) && '' !== FYNEX_WC_API_BASE ) {
+			return untrailingslashit( FYNEX_WC_API_BASE );
+		}
+		return self::API_BASE;
 	}
 }

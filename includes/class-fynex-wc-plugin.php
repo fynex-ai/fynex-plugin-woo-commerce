@@ -12,9 +12,12 @@ final class Fynex_WC_Plugin {
 		require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-gateway.php';
 
 		Fynex_WC_Webhook::register();
+		Fynex_WC_Payment_Check::register();
 		Fynex_WC_Refund_Reconciliation::register();
 		add_filter( 'woocommerce_payment_gateways', array( __CLASS__, 'register_gateway' ) );
-		add_action( 'woocommerce_blocks_loaded', array( __CLASS__, 'register_blocks' ) );
+		// woocommerce_blocks_loaded has already fired by plugins_loaded:20, so hook the
+		// registry itself; it initialises on init:5.
+		add_action( 'woocommerce_blocks_payment_method_type_registration', array( __CLASS__, 'register_blocks' ) );
 	}
 
 	public static function register_gateway( array $gateways ): array {
@@ -22,18 +25,16 @@ final class Fynex_WC_Plugin {
 		return $gateways;
 	}
 
-	public static function register_blocks(): void {
+	/**
+	 * @param \Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry $payment_method_registry
+	 */
+	public static function register_blocks( $payment_method_registry ): void {
 		if ( ! class_exists( '\Automattic\\WooCommerce\\Blocks\\Payments\\Integrations\\AbstractPaymentMethodType' ) ) {
 			return;
 		}
 
 		require_once FYNEX_WC_DIR . 'includes/class-fynex-wc-blocks-support.php';
-		add_action(
-			'woocommerce_blocks_payment_method_type_registration',
-			static function ( $payment_method_registry ): void {
-				$payment_method_registry->register( new Fynex_WC_Blocks_Support() );
-			}
-		);
+		$payment_method_registry->register( new Fynex_WC_Blocks_Support() );
 	}
 
 	public static function woocommerce_missing_notice(): void {
