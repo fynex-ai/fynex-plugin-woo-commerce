@@ -17,6 +17,12 @@ final class Fynex_WC_Webhook {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( __CLASS__, 'receive' ),
+				// The route is called by Fynex's servers, not by a logged-in user, so
+				// there is no WordPress capability to check. Authentication happens in
+				// receive(): every request must carry an HMAC-SHA256 signature over
+				// "<timestamp>.<raw body>" made with the signing secret Fynex issued
+				// when the webhook was registered, with a bounded clock skew; anything
+				// else is answered 401 before the body is read as an event.
 				'permission_callback' => '__return_true',
 			)
 		);
