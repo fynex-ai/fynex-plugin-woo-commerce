@@ -42,12 +42,26 @@ Review takes from days to weeks; replies come by email to the account owner.
 svn checkout https://plugins.svn.wordpress.org/fynex-for-woocommerce svn
 rm -rf svn/trunk/* && unzip -q dist/fynex-for-woocommerce.zip -d /tmp/ffw && cp -R /tmp/ffw/fynex-for-woocommerce/. svn/trunk/
 cp .wordpress-org/* svn/assets/          # icon, banner and screenshots for the directory page
+svn propset svn:mime-type image/png svn/assets/*.png
 svn cp svn/trunk svn/tags/X.Y.Z
-cd svn && svn add --force . && svn commit -m "Release X.Y.Z"
+cd svn && svn add --force . && svn status   # expect only "A" rows, and "A +" for the tag
+svn commit -m "Release X.Y.Z" --username fynexai --no-auth-cache
+```
+
+The commit asks for the SVN password of the `fynexai` account, which is separate from its
+WordPress.org login and is set at
+<https://profiles.wordpress.org/me/profile/edit/group/3/?screen=svn-password>. The person
+releasing types it; it is never stored in the repository or in a password cache.
+
+macOS ships no `svn`. Instead of installing one, run the same commands inside a throwaway
+container from the checkout directory:
+
+```sh
+docker run --rm -it -v "$PWD":/w -w /w alpine:3.20 sh -c 'apk add -q --no-cache subversion && sh'
 ```
 
 The directory page shows the version named by `Stable tag` in `trunk/readme.txt`, so tag first and
-bump `Stable tag` in the same commit.
+bump `Stable tag` in the same commit. 1.0.0 was published this way on 2026-10-19.
 
 ## QIT (Woo Marketplace)
 
