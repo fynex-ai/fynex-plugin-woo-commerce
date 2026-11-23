@@ -74,8 +74,5 @@ jobs:
           persist-credentials: false
       - name: Build installable plugin zip
         run: ./bin/package
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: fynex-for-woocommerce
-          path: dist/fynex-for-woocommerce.zip
-          if-no-files-found: error
+      - name: Check the zip
+        run: unzip -tq dist/fynex-for-woocommerce.zip
