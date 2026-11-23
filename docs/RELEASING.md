@@ -24,6 +24,18 @@ intermediate build.
 - [ ] Plugin Check passes on the zip (`wp plugin check fynex-for-woocommerce`).
 - [ ] Manual pass of `docs/TESTING.md` against a Fynex test key.
 
+## GitHub release
+
+Push the tag `vX.Y.Z` from the merged release commit. `.github/workflows/release.yml`
+checks that the tag equals the plugin header `Version:`, runs `./bin/package`, and
+creates the GitHub release `vX.Y.Z` with `dist/fynex-for-woocommerce.zip` attached. If
+the release already exists (drafted by hand first), it attaches the zip to it and
+replaces an earlier copy of the same file. Only that job gets `contents: write`.
+
+CI does not keep the zip as an Actions artifact: the `package` job in `checks.yml`
+builds and tests it on every pull request and push to `main`, then discards it.
+The release asset is the downloadable copy.
+
 ## WordPress.org
 
 **First submission (once).** The company's WordPress.org account uploads the zip at
@@ -35,10 +47,11 @@ WordPress.org user named `fynex` exists (joined January 2024) and is not ours. T
 `fynex-for-woocommerce` was still free on 2026-10-16.
 Review takes from days to weeks; replies come by email to the account owner.
 
-**Every release after approval.** WordPress.org serves the plugin from SVN, not from Git:
+**Every release after approval.** WordPress.org serves the plugin from SVN, not from Git.
+Use the zip attached to the GitHub release, or build the same one locally:
 
 ```sh
-./bin/package
+./bin/package    # or: gh release download vX.Y.Z -p fynex-for-woocommerce.zip -D dist
 svn checkout https://plugins.svn.wordpress.org/fynex-for-woocommerce svn
 rm -rf svn/trunk/* && unzip -q dist/fynex-for-woocommerce.zip -d /tmp/ffw && cp -R /tmp/ffw/fynex-for-woocommerce/. svn/trunk/
 cp .wordpress-org/* svn/assets/          # icon, banner and screenshots for the directory page

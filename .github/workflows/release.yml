@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Attach plugin zip to the GitHub release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Tag matches the plugin version
+        run: |
+          version=$(sed -n 's/^ \* Version: *//p' fynex-for-woocommerce.php)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME does not match plugin Version: $version" >&2; exit 1; }
+      - name: Build installable plugin zip
+        run: ./bin/package
+      - name: Create the release or attach the zip to it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          zip=dist/fynex-for-woocommerce.zip
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$zip" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$zip" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+          fi
